@@ -1,4 +1,4 @@
-import { IAdapter, IDriver, IStorage, ICommand } from '../interfaces/index.js';
+import { IAdapter, IDriver, IStorage, IAgentRegistry, ICommand } from '../interfaces/index.js';
 
 /**
  * Manages all registered Extensions for the Bark core.
@@ -10,6 +10,7 @@ export class ExtensionRegistry {
         this.drivers = new Map();    // name -> IDriver
         this.commands = new Set();   // ICommand[]
         this.storagePlugin = null;   // IStorage
+        this.agentRegistry = null;   // IAgentRegistry
     }
 
     _assertImplements(instance, methods, name) {
@@ -59,6 +60,18 @@ export class ExtensionRegistry {
     }
 
     /**
+     * @param {IAgentRegistry} registry 
+     */
+    registerAgentRegistry(registry) {
+        this._assertImplements(registry, ['getAgent', 'saveAgent', 'deleteAgent', 'listAgents'], `Agent registry`);
+
+        if (this.agentRegistry) {
+            console.warn(`[ExtensionRegistry] Overwriting existing Agent registry.`);
+        }
+        this.agentRegistry = registry;
+    }
+
+    /**
      * @param {ICommand} command 
      */
     registerCommand(command) {
@@ -73,6 +86,7 @@ export class ExtensionRegistry {
     getAllDrivers() { return Array.from(this.drivers.values()); }
 
     getStorage() { return this.storagePlugin; }
+    getAgentRegistry() { return this.agentRegistry; }
     getAllCommands() { return Array.from(this.commands); }
 }
 

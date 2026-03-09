@@ -80,9 +80,10 @@ export class IDriver {
      * Send a command/prompt to the runtime.
      * @param {string} sessionId
      * @param {string} cmd
+     * @param {string} [systemPrompt] - Optional system instructions for this command/session
      * @returns {Promise<void>}
      */
-    async sendCommand(sessionId, cmd) { throw new NotImplementedError('sendCommand'); }
+    async sendCommand(sessionId, cmd, systemPrompt) { throw new NotImplementedError('sendCommand'); }
 
     /**
      * Kill the runtime process for the given session.
@@ -140,6 +141,36 @@ export class IStorage {
      * @returns {Promise<void>}
      */
     async updateAgentState(agentId, state) { throw new NotImplementedError('updateAgentState'); }
+}
+
+/**
+ * IAgentRegistry Contract
+ * Handles persistence and lifecycle of defined agents (pups).
+ */
+export class IAgentRegistry {
+    /**
+     * @param {string} name
+     * @returns {Promise<Object>}
+     */
+    async getAgent(name) { throw new NotImplementedError('getAgent'); }
+
+    /**
+     * @param {string} name
+     * @param {Object} config - { driver, systemPrompt, ... }
+     * @returns {Promise<void>}
+     */
+    async saveAgent(name, config) { throw new NotImplementedError('saveAgent'); }
+
+    /**
+     * @param {string} name
+     * @returns {Promise<void>}
+     */
+    async deleteAgent(name) { throw new NotImplementedError('deleteAgent'); }
+
+    /**
+     * @returns {Promise<Array<Object>>}
+     */
+    async listAgents() { throw new NotImplementedError('listAgents'); }
 }
 
 /**

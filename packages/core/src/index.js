@@ -69,6 +69,15 @@ export class BarkCore {
     }
 
     /**
+     * Attach an Agent Registry plugin.
+     * @param {import('./interfaces/index.js').IAgentRegistry} registry 
+     */
+    useAgentRegistry(registry) {
+        this.registry.registerAgentRegistry(registry);
+        return this;
+    }
+
+    /**
      * Attach a Command plugin.
      * @param {import('./interfaces/index.js').ICommand} command 
      */

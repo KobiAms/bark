@@ -53,15 +53,50 @@ export class MessageRouter {
                 }
             }
 
-            // 2. State & Session Management
-            let session = await storage.getSession(sessionId);
+            // 2. Mention Detection (@name)
+            let targetPayload = payload;
+            let targetAgentName = null;
+            let targetDriverName = this.defaultDriverName;
+            let targetSystemPrompt = null;
+
+            if (typeof payload === 'string' && payload.startsWith('@')) {
+                const parts = payload.split(' ');
+                const rawName = parts[0].substring(1); // Remove '@'
+                const agentRegistry = this.registry.getAgentRegistry();
+                
+                if (agentRegistry) {
+                    const agent = await agentRegistry.getAgent(rawName);
+                    if (agent) {
+                        targetAgentName = rawName;
+                        targetDriverName = agent.driver;
+                        targetSystemPrompt = agent.systemPrompt;
+                        targetPayload = parts.slice(1).join(' ').trim();
+                    } else {
+                        // Optional: only notify if it definitely looks like a mention intent
+                        // For now, if @name is at start and not found, we warn
+                        this.eventBus.publish({ 
+                            type: 'stream.chunk', 
+                            sessionId, 
+                            chunk: `❓ Unknown pup: @${rawName}` 
+                        });
+                        return;
+                    }
+                }
+            }
+
+            // 3. State & Session Management
+            // If mentioned, we use a composite ID for isolation: "agentName:sessionId"
+            const effectiveSessionId = targetAgentName ? `${targetAgentName}:${sessionId}` : sessionId;
+
+            let session = await storage.getSession(effectiveSessionId);
             if (!session) {
                 const availableDrivers = Array.from(this.registry.drivers.keys());
                 session = {
-                    sessionId,
-                    driverName: this.defaultDriverName || availableDrivers[0]
+                    sessionId: effectiveSessionId,
+                    driverName: targetDriverName || availableDrivers[0],
+                    targetSystemPrompt // Carry system prompt for initialization
                 };
-                await storage.saveSession(sessionId, session);
+                await storage.saveSession(effectiveSessionId, session);
             }
 
             const driverName = session.driverName;
@@ -69,12 +104,13 @@ export class MessageRouter {
 
             if (!driver) {
                 console.error(`[MessageRouter] Driver '${driverName}' not found.`);
-                this.eventBus.publish({ type: 'error.occurred', sessionId, error: new Error(`Driver ${driverName} not found`) });
+                this.eventBus.publish({ type: 'error.occurred', sessionId: effectiveSessionId, error: new Error(`Driver ${driverName} not found`) });
                 return;
             }
 
-            // 3. Route to Driver
-            await driver.sendCommand(sessionId, payload);
+            // 4. Route to Driver
+            // If driver supports system prompts, we pass it from the session state
+            await driver.sendCommand(effectiveSessionId, targetPayload, session.targetSystemPrompt);
 
         } catch (error) {
             console.error(`[MessageRouter] Error processing message for session ${sessionId}:`, error);

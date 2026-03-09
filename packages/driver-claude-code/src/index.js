@@ -30,7 +30,7 @@ export class ClaudeCodeDriver extends IDriver {
         }
     }
 
-    async sendCommand(sessionId, cmd) {
+    async sendCommand(sessionId, cmd, systemPrompt) {
         if (this.activeProcesses.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
@@ -41,11 +41,11 @@ export class ClaudeCodeDriver extends IDriver {
         // Try to resume first
         console.log(`[ClaudeCodeDriver] Attempting to resume session ${sessionId} (UUID: ${validUuid})...`);
         try {
-            await this._execClaude(sessionId, validUuid, cmd, true);
+            await this._execClaude(sessionId, validUuid, cmd, true, systemPrompt);
         } catch (error) {
             if (error.message.includes('No conversation found')) {
                 console.log(`[ClaudeCodeDriver] Session not found. Initializing new session ${sessionId}...`);
-                await this._execClaude(sessionId, validUuid, cmd, false);
+                await this._execClaude(sessionId, validUuid, cmd, false, systemPrompt);
             } else {
                 throw error;
             }
@@ -57,7 +57,7 @@ export class ClaudeCodeDriver extends IDriver {
         return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
     }
 
-    async _execClaude(sessionId, uuid, cmd, isResume) {
+    async _execClaude(sessionId, uuid, cmd, isResume, sessionSystemPrompt) {
         const args = [
             '--dangerously-skip-permissions',
             isResume ? '--resume' : '--session-id', uuid,
@@ -66,9 +66,10 @@ export class ClaudeCodeDriver extends IDriver {
             '--verbose'
         ];
 
-        if (this.systemPrompt) {
+        const activeSystemPrompt = sessionSystemPrompt || this.systemPrompt;
+        if (activeSystemPrompt) {
             args.push(isResume ? '--append-system-prompt' : '--system-prompt');
-            args.push(this.systemPrompt);
+            args.push(activeSystemPrompt);
         }
 
         args.push('-p');

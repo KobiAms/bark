@@ -1,10 +1,9 @@
-import { IStorage } from '@bark/core';
+import { IStorage, IAgentRegistry } from '@bark/core';
 
 export class MemoryStorage extends IStorage {
     constructor() {
         super();
         this.sessions = new Map(); // sessionId -> state
-        this.agents = new Map();   // agentId -> state
     }
 
     async getSession(sessionId) {
@@ -14,12 +13,30 @@ export class MemoryStorage extends IStorage {
     async saveSession(sessionId, state) {
         this.sessions.set(sessionId, state);
     }
+}
 
-    async getAgentState(agentId) {
-        return this.agents.get(agentId) || null;
+export class MemoryAgentRegistry extends IAgentRegistry {
+    constructor() {
+        super();
+        this.agents = new Map(); // name -> config
     }
 
-    async updateAgentState(agentId, state) {
-        this.agents.set(agentId, state);
+    async getAgent(name) {
+        return this.agents.get(name) || null;
+    }
+
+    async saveAgent(name, config) {
+        this.agents.set(name, config);
+    }
+
+    async deleteAgent(name) {
+        this.agents.delete(name);
+    }
+
+    async listAgents() {
+        return Array.from(this.agents.entries()).map(([name, config]) => ({
+            name,
+            ...config
+        }));
     }
 }
