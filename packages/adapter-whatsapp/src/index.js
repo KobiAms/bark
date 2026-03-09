@@ -114,44 +114,8 @@ export class WhatsAppAdapter extends IAdapter {
 
                 // Wire up inbound message handler
                 this.client.on('message_create', async (msg) => {
-                    // Only process messages from the target group and not from self
-                    const chat = await msg.getChat();
-                    if (!chat.isGroup || chat.name !== this.groupName) return;
-                    if (msg.fromMe) return;
-
-                    let quotedMessageMetadata = null;
-                    if (msg.hasQuotedMsg) {
-                        try {
-                            const quotedMsg = await msg.getQuotedMessage();
-                            const contact = await quotedMsg.getContact();
-                            const senderName = contact.pushname || contact.name || contact.shortName;
-                            if (senderName) {
-                                quotedMessageMetadata = { senderName };
-                            }
-                        } catch (err) {
-                            console.warn(`[WhatsAppAdapter] Failed to fetch quoted message data: ${err.message}`);
-                        }
-                    }
-
-                    const contact = await msg.getContact();
-                    const sender = contact.pushname || contact.number;
-
-                    const event = {
-                        type: 'message.received',
-                        sessionId: `wa-group-${chat.id.user}`, // Keep original sessionId format
-                        senderId: contact.number || contact.id?.user || sender,
-                        senderName: sender,
-                        payload: msg.body.trim(),
-                        rawId: msg.id._serialized,
-                        hasMedia: msg.hasMedia,
-                        isReply: msg.hasQuotedMsg,
-                        quotedMessageMetadata, // Add the new metadata
-                        timestamp: new Date(msg.timestamp * 1000) // Convert WWebJS timestamp (seconds) to Date
-                    };
-                    
-                    if (this.messageCb) {
-                        this.messageCb(event);
-                    }
+                    if (!this.processInboundMessage) return;
+                    await this.processInboundMessage(msg);
                 });
                 
                 resolve();
@@ -175,6 +139,20 @@ export class WhatsAppAdapter extends IAdapter {
         if (!chat.isGroup || chat.name !== this.groupName) return;
         if (msg.fromMe) return;
 
+        let quotedMessageMetadata = null;
+        if (msg.hasQuotedMsg) {
+            try {
+                const quotedMsg = await msg.getQuotedMessage();
+                const contact = await quotedMsg.getContact();
+                const senderName = contact.pushname || contact.name || contact.shortName;
+                if (senderName) {
+                    quotedMessageMetadata = { senderName };
+                }
+            } catch (err) {
+                console.warn(`[WhatsAppAdapter] Failed to fetch quoted message data: ${err.message}`);
+            }
+        }
+
         const contact = await msg.getContact();
         const sender = contact.pushname || contact.number;
         
@@ -190,7 +168,8 @@ export class WhatsAppAdapter extends IAdapter {
             payload: msg.body.trim(),
             rawId: msg.id._serialized, // Store for edits/replies
             hasMedia,
-            isReply: msg.hasQuotedMsg
+            isReply: msg.hasQuotedMsg,
+            quotedMessageMetadata
         };
 
         if (this.messageCb) {
