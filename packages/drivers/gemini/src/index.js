@@ -58,7 +58,6 @@ export class GeminiDriver extends IDriver {
 
             // Progress state
             let progressText = '';
-            let thinkingText = '';
             const tools = [];
 
             child.stdout.on('data', (data) => {
@@ -87,11 +86,10 @@ export class GeminiDriver extends IDriver {
                             break;
 
                         case 'thinking':
-                            // Gemini reasoning - accumulate and stream
-                            thinkingText += event.text;
+                            // Gemini reasoning - accumulate into progress
+                            progressText += event.text;
                             if (this.progressCb) {
-                                const displayText = progressText || thinkingText;
-                                this.progressCb({ sessionId, progressText: buildProgressText(displayText, tools), isThinking: true });
+                                this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
                             }
                             break;
 
