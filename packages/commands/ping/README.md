@@ -1,1 +1,0 @@
-# @bark/command-ping\n\nA simple ping command for testing Bark architecture\n\nSee the [root README](../../README.md) for full documentation and architecture details.

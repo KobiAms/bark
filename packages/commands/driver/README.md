@@ -1,1 +1,0 @@
-# @bark/command-driver\n\nA command to switch active drivers for a session\n\nSee the [root README](../../README.md) for full documentation and architecture details.
