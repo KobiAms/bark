@@ -97,6 +97,7 @@ export class ListAgentsCommand extends ICommand {
         if (agents.length === 0) {
             const msg = '🐾 No agents registered yet. Use `/new <name>` to spawn one!';
             eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
+            eventBus.publish({ type: 'command.complete', sessionId, result: msg });
             return;
         }
 

@@ -51,12 +51,10 @@ export class OpenCodeDriver extends IDriver {
 
             this.activeSessions.set(sessionId, child);
 
-            let buffer = '';
             let errorBuffer = '';
 
             child.stdout.on('data', (data) => {
                 const chunk = data.toString();
-                buffer += chunk;
                 if (this.streamCb) {
                     this.streamCb({ sessionId, chunk });
                 }

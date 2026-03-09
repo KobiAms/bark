@@ -1,9 +1,8 @@
 import { IAdapter } from '@bark/core';
 import pkg from 'whatsapp-web.js';
-const { Client, LocalAuth, MessageMedia } = pkg;
-import { writeFileSync, existsSync, rmSync } from 'fs';
+const { Client, LocalAuth } = pkg;
+import { existsSync, rmSync } from 'fs';
 import path from 'path';
-import { tmpdir } from 'os';
 
 /**
  * Chromium leaves behind singleton lock/socket files when the process is killed
@@ -157,8 +156,7 @@ export class WhatsAppAdapter extends IAdapter {
         const sender = contact.pushname || contact.number;
         
         let hasMedia = msg.hasMedia;
-        let mediaDetails = null;
-        
+
         // Emulate BarkEvent structure
         const event = {
             type: 'message.received',

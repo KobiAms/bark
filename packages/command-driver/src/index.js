@@ -9,6 +9,14 @@ export class SwitchDriverCommand extends ICommand {
         const parts = payload.trim().split(' ');
         const desiredDriver = parts[1];
 
+        if (!desiredDriver) {
+            const availableDrivers = Array.from(registry.drivers.keys()).join(', ');
+            const msg = `Usage: /driver <name>. Available: ${availableDrivers}`;
+            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
+            eventBus.publish({ type: 'command.complete', sessionId, result: msg });
+            return;
+        }
+
         // Ensure driver exists
         if (!registry.getDriver(desiredDriver)) {
             eventBus.publish({

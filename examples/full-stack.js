@@ -12,6 +12,11 @@ import { SwitchDriverCommand } from '@bark/command-driver';
 import { TelegramAdapter } from '@bark/adapter-telegram';
 import { WhatsAppAdapter } from '@bark/adapter-whatsapp';
 
+function getPlatformId(sessionId) {
+    const idx = sessionId.indexOf(':');
+    return idx === -1 ? sessionId : sessionId.slice(idx + 1);
+}
+
 /**
  * Bootstrap the minimal Bark orchestration layer.
  */
@@ -61,33 +66,57 @@ async function main() {
     bark.useCommand(new ListAgentsCommand());
     bark.useCommand(new RestartCommand());
 
-    // Provide a way for the adapter to log back explicitly without looping
-    // Note: stream.chunk events are only forwarded to the CLI adapter because Telegram and WhatsApp
-    // do not natively support streaming, and send-then-edit is non-trivial. They will only receive 
-    // the final text on driver.complete.
+    // Maps agent sessionId → platform sessionId for reply routing.
+    // Agents have a single shared context regardless of which adapter invoked them.
+    // The originating platform session is tracked here so replies go back to the right place.
+    const agentReplyTo = new Map();
+
     bark.eventBus.subscribe('stream.chunk', (event) => {
-        if (event.sessionId.startsWith('cli-') && activeAdapters.cli) {
-            activeAdapters.cli.sendMessage(event.sessionId, event.chunk);
+        const replyTo = agentReplyTo.get(event.sessionId) || event.sessionId;
+        if (getPlatformId(replyTo).startsWith('cli-') && activeAdapters.cli) {
+            activeAdapters.cli.sendMessage(replyTo, event.chunk);
+        }
+    });
+
+    bark.eventBus.subscribe('driver.thinking', (event) => {
+        if (event.replyTo) agentReplyTo.set(event.sessionId, event.replyTo);
+        const replyTo = agentReplyTo.get(event.sessionId) || event.sessionId;
+        const platformId = getPlatformId(replyTo);
+        if (platformId.startsWith('wa-') && activeAdapters.whatsapp) {
+            activeAdapters.whatsapp.sendMessage(replyTo, '⏳ _thinking..._')
+                .catch(() => {});
+        } else if (platformId.startsWith('tg-') && activeAdapters.telegram) {
+            activeAdapters.telegram.sendMessage(replyTo, '⏳ _thinking..._')
+                .catch(() => {});
         }
     });
 
     bark.eventBus.subscribe('driver.complete', (event) => {
-        if (event.sessionId.startsWith('cli-') && activeAdapters.cli) {
-            console.log(); 
+        const replyTo = agentReplyTo.get(event.sessionId) || event.sessionId;
+        const platformId = getPlatformId(replyTo);
+        if (platformId.startsWith('cli-') && activeAdapters.cli) {
+            console.log();
             if (activeAdapters.cli.rl) activeAdapters.cli.rl.prompt();
-        } else if (event.sessionId.startsWith('wa-') && activeAdapters.whatsapp) {
-            activeAdapters.whatsapp.sendMessage(event.sessionId, event.result)
+        } else if (platformId.startsWith('wa-') && activeAdapters.whatsapp) {
+            activeAdapters.whatsapp.sendMessage(replyTo, event.result)
                 .catch(err => console.error('[WhatsAppAdapter] Reply failed:', err));
-        } else if (event.sessionId.startsWith('tg-') && activeAdapters.telegram) {
-            activeAdapters.telegram.sendMessage(event.sessionId, event.result)
+        } else if (platformId.startsWith('tg-') && activeAdapters.telegram) {
+            activeAdapters.telegram.sendMessage(replyTo, event.result)
                 .catch(err => console.error('[TelegramAdapter] Reply failed:', err));
         }
     });
 
     bark.eventBus.subscribe('command.complete', (event) => {
-        if (event.sessionId.startsWith('cli-') && activeAdapters.cli) {
-            console.log(); 
+        const platformId = getPlatformId(event.sessionId);
+        if (platformId.startsWith('cli-') && activeAdapters.cli) {
+            console.log();
             if (activeAdapters.cli.rl) activeAdapters.cli.rl.prompt();
+        } else if (platformId.startsWith('wa-') && activeAdapters.whatsapp) {
+            activeAdapters.whatsapp.sendMessage(event.sessionId, event.result)
+                .catch(err => console.error('[WhatsAppAdapter] Command reply failed:', err));
+        } else if (platformId.startsWith('tg-') && activeAdapters.telegram) {
+            activeAdapters.telegram.sendMessage(event.sessionId, event.result)
+                .catch(err => console.error('[TelegramAdapter] Command reply failed:', err));
         }
     });
 

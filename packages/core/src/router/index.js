@@ -111,7 +111,7 @@ export class MessageRouter {
             }
 
             // 3. State & Session Management
-            const effectiveSessionId = targetAgentName ? `${targetAgentName}:${sessionId}` : sessionId;
+            const effectiveSessionId = targetAgentName || sessionId;
 
             let session = await storage.getSession(effectiveSessionId);
             if (!session) {
@@ -135,6 +135,7 @@ export class MessageRouter {
             // 4. Route to Driver
             // Always use the latest system prompt from the registry if it was a mention,
             // otherwise use whatever the driver was initialized with.
+            this.eventBus.publish({ type: 'driver.thinking', sessionId: effectiveSessionId, replyTo: sessionId });
             await driver.sendCommand(effectiveSessionId, targetPayload, targetSystemPrompt);
 
         } catch (error) {
