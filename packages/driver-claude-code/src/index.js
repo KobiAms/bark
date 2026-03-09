@@ -32,115 +32,129 @@ export class ClaudeCodeDriver extends IDriver {
 
     async sendCommand(sessionId, cmd) {
         if (this.activeProcesses.has(sessionId)) {
-            // Already running a command. For true multi-turn, you'd wait or buffer.
-            // For now, we reject concurrent commands on the same session.
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
         }
 
-        // Claude CLI strict requirements: session ID must be a valid UUID
-        // We append Date.now() to ensure a unique UUID per execution, as the CLI throws 'Session ID already in use'
-        // if we attempt to recreate an existing deterministic UUID across multiple single-turn executions.
-        const claudeSessionId = crypto.createHash('md5').update(sessionId + Date.now().toString()).digest('hex');
-        const validUuid = `${claudeSessionId.slice(0, 8)}-${claudeSessionId.slice(8, 12)}-4${claudeSessionId.slice(13, 16)}-a${claudeSessionId.slice(17, 20)}-${claudeSessionId.slice(20, 32)}`;
+        const validUuid = this._getUuid(sessionId);
+        
+        // Try to resume first
+        console.log(`[ClaudeCodeDriver] Attempting to resume session ${sessionId} (UUID: ${validUuid})...`);
+        try {
+            await this._execClaude(sessionId, validUuid, cmd, true);
+        } catch (error) {
+            if (error.message.includes('No conversation found')) {
+                console.log(`[ClaudeCodeDriver] Session not found. Initializing new session ${sessionId}...`);
+                await this._execClaude(sessionId, validUuid, cmd, false);
+            } else {
+                throw error;
+            }
+        }
+    }
 
+    _getUuid(sessionId) {
+        const hash = crypto.createHash('md5').update(sessionId).digest('hex');
+        return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+    }
+
+    async _execClaude(sessionId, uuid, cmd, isResume) {
         const args = [
-            '--dangerously-skip-permissions', // Needed for headless automation
-            '--session-id', validUuid,
+            '--dangerously-skip-permissions',
+            isResume ? '--resume' : '--session-id', uuid,
             '--model', this.model,
             '--output-format', 'stream-json',
             '--verbose'
         ];
 
-        // If we have a system prompt, add it
         if (this.systemPrompt) {
-            args.push('--system-prompt');
+            args.push(isResume ? '--append-system-prompt' : '--system-prompt');
             args.push(this.systemPrompt);
         }
 
-        console.log(`[ClaudeCodeDriver] Spawning claude for session ${sessionId}...`);
-        
-        // Push the prompt as a direct argument using '-p' instead of stdin piping
         args.push('-p');
         args.push(cmd);
         
         const child = spawn('claude', args);
-        
-        // Critcial: Claude might hang waiting for stdin if we don't close it explicitly
         child.stdin.end();
 
         this.activeProcesses.set(sessionId, child);
 
         let finalResult = '';
         let resultError = false;
-
         let buffer = '';
+        let errorMsg = '';
+        let jsonError = null;
 
-        child.stdout.on('data', (data) => {
-            const raw = data.toString();
-            // console.log(`[ClaudeCodeDriver STDOUT] ${raw.trim()}`);
-            buffer += raw;
-            
-            // Claude's stream emits JSON objects separated by newlines, but sometimes multiple newlines or none.
-            const lines = buffer.split(/\r?\n/);
-            // The last line might be incomplete, keep it in the buffer
-            buffer = lines.pop() || '';
+        return new Promise((resolve, reject) => {
+            child.stdout.on('data', (data) => {
+                buffer += data.toString();
+                const lines = buffer.split(/\r?\n/);
+                buffer = lines.pop() || '';
 
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('{')) continue;
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith('{')) continue;
 
-                try {
-                    const parsed = JSON.parse(trimmed);
-                    
-                    if (parsed.type === 'assistant') {
-                        // Claude Code outputs actual generation delta in an assistant event wrapper
-                        const contents = parsed.message?.content || [];
-                        for (const content of contents) {
-                            if (content.type === 'text' && this.streamCb) {
-                                this.streamCb({ sessionId, chunk: content.text });
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (parsed.type === 'assistant') {
+                            const contents = parsed.message?.content || [];
+                            for (const content of contents) {
+                                if (content.type === 'text' && this.streamCb) {
+                                    this.streamCb({ sessionId, chunk: content.text });
+                                }
+                            }
+                        } else if (parsed.type === 'result') {
+                            finalResult = parsed.result || '';
+                            resultError = !!parsed.is_error;
+                            if (resultError && parsed.errors) {
+                                jsonError = parsed.errors.join(', ');
                             }
                         }
-                    } else if (parsed.type === 'result') {
-                        finalResult = parsed.result || '';
-                        resultError = !!parsed.is_error;
-                    }
-                } catch (err) {
-                    // Incomplete or invalid JSON line, ignore.
+                    } catch (err) {}
                 }
-            }
-        });
+            });
 
-        child.stderr.on('data', (data) => {
-            console.error(`[ClaudeCodeDriver STDERR] ${data.toString()}`);
-        });
+            child.stderr.on('data', (data) => {
+                errorMsg += data.toString();
+            });
 
-        child.on('error', (err) => {
-            console.error(`[ClaudeCodeDriver ERROR] Failed to spawn child process:`, err);
-            this.activeProcesses.delete(sessionId);
-            if (this.errorCb) this.errorCb({ sessionId, error: err });
-        });
+            child.on('error', (err) => {
+                this.activeProcesses.delete(sessionId);
+                reject(err);
+            });
 
-        child.on('close', async (code) => {
-            console.log(`[ClaudeCodeDriver] Child process closed with code ${code}`);
-            this.activeProcesses.delete(sessionId);
+            child.on('close', (code) => {
+                this.activeProcesses.delete(sessionId);
 
-            // Process any remaining data in buffer that didn't have a trailing newline
-            if (buffer.trim().startsWith('{')) {
-                try {
-                    const parsed = JSON.parse(buffer.trim());
-                    if (parsed.type === 'result') {
-                        finalResult = parsed.result || '';
-                        resultError = !!parsed.is_error;
+                // Flush buffer
+                if (buffer.trim().startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(buffer.trim());
+                        if (parsed.type === 'result') {
+                            finalResult = parsed.result || '';
+                            resultError = !!parsed.is_error;
+                            if (resultError && parsed.errors) {
+                                jsonError = parsed.errors.join(', ');
+                            }
+                        }
+                    } catch (e) {}
+                }
+
+                const finalError = jsonError || errorMsg;
+                if (code !== 0 || resultError) {
+                    if (finalError.includes('No conversation found')) {
+                        reject(new Error('No conversation found'));
+                    } else {
+                        const err = new Error(`Claude CLI exited with code ${code}: ${finalError}`);
+                        if (this.errorCb) this.errorCb({ sessionId, error: err });
+                        reject(err);
                     }
-                } catch (e) { /* ignore */ }
-            }
-
-            if (code !== 0 && resultError) {
-                if (this.errorCb) this.errorCb({ sessionId, error: new Error(`Claude CLI exited with code ${code}`) });
-            } else {
-                if (this.completeCb) this.completeCb({ sessionId, result: finalResult });
-            }
+                } else {
+                    if (this.completeCb) this.completeCb({ sessionId, result: finalResult });
+                    resolve();
+                }
+            });
         });
     }
 
