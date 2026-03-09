@@ -128,19 +128,6 @@ export class IStorage {
      * @returns {Promise<void>}
      */
     async saveSession(sessionId, state) { throw new NotImplementedError('saveSession'); }
-
-    /**
-     * @param {string} agentId
-     * @returns {Promise<Object>}
-     */
-    async getAgentState(agentId) { throw new NotImplementedError('getAgentState'); }
-
-    /**
-     * @param {string} agentId
-     * @param {Object} state
-     * @returns {Promise<void>}
-     */
-    async updateAgentState(agentId, state) { throw new NotImplementedError('updateAgentState'); }
 }
 
 /**

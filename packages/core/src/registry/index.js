@@ -51,7 +51,7 @@ export class ExtensionRegistry {
      * @param {IStorage} storage 
      */
     registerStorage(storage) {
-        this._assertImplements(storage, ['getSession', 'saveSession', 'getAgentState', 'updateAgentState'], `Storage plugin`);
+        this._assertImplements(storage, ['getSession', 'saveSession'], `Storage plugin`);
 
         if (this.storagePlugin) {
             console.warn(`[ExtensionRegistry] Overwriting existing Storage plugin.`);

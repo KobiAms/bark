@@ -54,13 +54,14 @@ export class MessageRouter {
             }
 
             // 2. Mention Detection (@name)
+            const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
             let targetPayload = payload;
             let targetAgentName = null;
             let targetDriverName = this.defaultDriverName;
             let targetSystemPrompt = null;
 
-            if (typeof payload === 'string' && payload.startsWith('@')) {
-                const parts = payload.split(' ');
+            if (trimmedPayload.startsWith('@')) {
+                const parts = trimmedPayload.split(/\s+/);
                 const rawName = parts[0].substring(1); // Remove '@'
                 const agentRegistry = this.registry.getAgentRegistry();
                 
@@ -70,10 +71,20 @@ export class MessageRouter {
                         targetAgentName = rawName;
                         targetDriverName = agent.driver;
                         targetSystemPrompt = agent.systemPrompt;
-                        targetPayload = parts.slice(1).join(' ').trim();
+                        
+                        // Extract remaining text after @name
+                        const nameIndex = payload.indexOf('@' + rawName);
+                        targetPayload = payload.substring(nameIndex + rawName.length + 1).trim();
+
+                        if (!targetPayload) {
+                            this.eventBus.publish({ 
+                                type: 'stream.chunk', 
+                                sessionId, 
+                                chunk: `🐾 @${rawName} is listening! What would you like to ask?` 
+                            });
+                            return;
+                        }
                     } else {
-                        // Optional: only notify if it definitely looks like a mention intent
-                        // For now, if @name is at start and not found, we warn
                         this.eventBus.publish({ 
                             type: 'stream.chunk', 
                             sessionId, 
@@ -85,7 +96,6 @@ export class MessageRouter {
             }
 
             // 3. State & Session Management
-            // If mentioned, we use a composite ID for isolation: "agentName:sessionId"
             const effectiveSessionId = targetAgentName ? `${targetAgentName}:${sessionId}` : sessionId;
 
             let session = await storage.getSession(effectiveSessionId);
@@ -93,8 +103,7 @@ export class MessageRouter {
                 const availableDrivers = Array.from(this.registry.drivers.keys());
                 session = {
                     sessionId: effectiveSessionId,
-                    driverName: targetDriverName || availableDrivers[0],
-                    targetSystemPrompt // Carry system prompt for initialization
+                    driverName: targetDriverName || availableDrivers[0]
                 };
                 await storage.saveSession(effectiveSessionId, session);
             }
@@ -109,8 +118,9 @@ export class MessageRouter {
             }
 
             // 4. Route to Driver
-            // If driver supports system prompts, we pass it from the session state
-            await driver.sendCommand(effectiveSessionId, targetPayload, session.targetSystemPrompt);
+            // Always use the latest system prompt from the registry if it was a mention,
+            // otherwise use whatever the driver was initialized with.
+            await driver.sendCommand(effectiveSessionId, targetPayload, targetSystemPrompt);
 
         } catch (error) {
             console.error(`[MessageRouter] Error processing message for session ${sessionId}:`, error);
