@@ -235,4 +235,11 @@ export class ICommand {
      * @returns {Promise<any>}
      */
     async execute(commandContext) { throw new NotImplementedError('execute'); }
+
+    /**
+     * Optional: return metadata so /help can list this command automatically.
+     * Return null (default) to opt out of help listing.
+     * @returns {{ usage: string, description: string, group?: string } | null}
+     */
+    describe() { return null; }
 }

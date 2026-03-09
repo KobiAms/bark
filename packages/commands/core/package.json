@@ -1,0 +1,10 @@
+{
+  "name": "@bark/commands-core",
+  "version": "1.0.0",
+  "description": "Built-in core commands for Bark",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}

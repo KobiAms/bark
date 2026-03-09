@@ -152,7 +152,9 @@ export class ClaudeCodeDriver extends IDriver {
 
                 const finalError = errorMsg || (resultError ? finalResult : '');
                 if (code !== 0 || resultError) {
-                    if (finalError.includes('No conversation found')) {
+                    // Claude CLI exits code 1 with no output when --resume finds no session
+                    const isSessionMissing = finalError.includes('No conversation found') || (isResume && code === 1 && !finalError.trim());
+                    if (isSessionMissing) {
                         reject(new Error('No conversation found'));
                     } else {
                         const err = new Error(`Claude CLI exited with code ${code}: ${finalError}`);
