@@ -28,12 +28,9 @@ export class BarkCore {
     useAdapter(name, adapter) {
         this.registry.registerAdapter(name, adapter);
         
-        // Wire adapter events to the bus
-        adapter.onMessage((barkEvent) => this.eventBus.publish(barkEvent));
+        // Wire adapter events to the bus, stamping adapterName so the router knows where to reply
+        adapter.onMessage((barkEvent) => this.eventBus.publish({ adapterName: name, ...barkEvent }));
         adapter.onError((error) => console.error(`[Adapter Error: ${name}]`, error));
-
-        // Let adapters listen to stream chunks directly if preferred, or we handle it globally if needed.
-        // For bidirectional streaming, we let adapters hook into the bus directly.
         
         return this;
     }
@@ -50,7 +47,11 @@ export class BarkCore {
         driver.onStream((streamEvent) => {
             this.eventBus.publish({ type: 'stream.chunk', ...streamEvent });
         });
-        
+
+        driver.onProgress((progressEvent) => {
+            this.eventBus.publish({ type: 'stream.progress', ...progressEvent });
+        });
+
         driver.onError((error) => console.error(`[Driver Error: ${name}]`, error));
         driver.onComplete((compEvent) => {
             this.eventBus.publish({ type: 'driver.complete', ...compEvent });

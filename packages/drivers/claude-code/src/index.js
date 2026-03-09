@@ -1,10 +1,11 @@
 import { IDriver } from '@bark/core';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
+import { parseLine, buildProgressText } from './parser.js';
 
 export class ClaudeCodeDriver extends IDriver {
     /**
-     * @param {Object} config 
+     * @param {Object} config
      * @param {string} [config.model="sonnet"] - The Claude model to use
      * @param {string} [config.systemPrompt=""] - Optional system instructions
      */
@@ -12,16 +13,16 @@ export class ClaudeCodeDriver extends IDriver {
         super();
         this.model = config.model || 'sonnet';
         this.systemPrompt = config.systemPrompt || '';
-        
+
         this.streamCb = null;
+        this.progressCb = null;
         this.errorCb = null;
         this.completeCb = null;
-        
+
         this.activeProcesses = new Map(); // sessionId -> ChildProcess
     }
 
     async spawn(config) {
-        // Validation: Ensure `claude` CLI is installed
         try {
             const { execSync } = await import('child_process');
             execSync('which claude', { stdio: 'ignore' });
@@ -37,9 +38,6 @@ export class ClaudeCodeDriver extends IDriver {
         }
 
         const validUuid = this._getUuid(sessionId);
-        
-        // Try to resume first
-        console.log(`[ClaudeCodeDriver] Attempting to resume session ${sessionId} (UUID: ${validUuid})...`);
         try {
             await this._execClaude(sessionId, validUuid, cmd, true, systemPrompt);
         } catch (error) {
@@ -72,9 +70,8 @@ export class ClaudeCodeDriver extends IDriver {
             args.push(activeSystemPrompt);
         }
 
-        args.push('-p');
-        args.push(cmd);
-        
+        args.push('-p', cmd);
+
         const child = spawn('claude', args);
         child.stdin.end();
 
@@ -86,6 +83,10 @@ export class ClaudeCodeDriver extends IDriver {
         let errorMsg = '';
         let jsonError = null;
 
+        // Progress state — accumulated per-session for buildProgressText
+        let progressText = '';
+        const tools = [];
+
         return new Promise((resolve, reject) => {
             child.stdout.on('data', (data) => {
                 buffer += data.toString();
@@ -93,26 +94,38 @@ export class ClaudeCodeDriver extends IDriver {
                 buffer = lines.pop() || '';
 
                 for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed || !trimmed.startsWith('{')) continue;
+                    const event = parseLine(line);
+                    if (!event) continue;
 
-                    try {
-                        const parsed = JSON.parse(trimmed);
-                        if (parsed.type === 'assistant') {
-                            const contents = parsed.message?.content || [];
-                            for (const content of contents) {
-                                if (content.type === 'text' && this.streamCb) {
-                                    this.streamCb({ sessionId, chunk: content.text });
-                                }
+                    switch (event.type) {
+                        case 'text':
+                            if (this.streamCb) this.streamCb({ sessionId, chunk: event.text });
+                            progressText += event.text;
+                            if (this.progressCb) {
+                                this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
                             }
-                        } else if (parsed.type === 'result') {
-                            finalResult = parsed.result || '';
-                            resultError = !!parsed.is_error;
-                            if (resultError && parsed.errors) {
-                                jsonError = parsed.errors.join(', ');
+                            break;
+
+                        case 'thinking':
+                        case 'thinking_start':
+                            progressText += event.text || '';
+                            if (this.progressCb) {
+                                this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
                             }
-                        }
-                    } catch (err) {}
+                            break;
+
+                        case 'tool':
+                            tools.push({ icon: event.icon, name: event.name });
+                            if (this.progressCb) {
+                                this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
+                            }
+                            break;
+
+                        case 'result':
+                            finalResult = event.text;
+                            resultError = event.isError;
+                            break;
+                    }
                 }
             });
 
@@ -128,21 +141,16 @@ export class ClaudeCodeDriver extends IDriver {
             child.on('close', (code) => {
                 this.activeProcesses.delete(sessionId);
 
-                // Flush buffer
-                if (buffer.trim().startsWith('{')) {
-                    try {
-                        const parsed = JSON.parse(buffer.trim());
-                        if (parsed.type === 'result') {
-                            finalResult = parsed.result || '';
-                            resultError = !!parsed.is_error;
-                            if (resultError && parsed.errors) {
-                                jsonError = parsed.errors.join(', ');
-                            }
-                        }
-                    } catch (e) {}
+                // Flush remaining buffer
+                if (buffer.trim()) {
+                    const event = parseLine(buffer.trim());
+                    if (event?.type === 'result') {
+                        finalResult = event.text;
+                        resultError = event.isError;
+                    }
                 }
 
-                const finalError = jsonError || errorMsg;
+                const finalError = errorMsg || (resultError ? finalResult : '');
                 if (code !== 0 || resultError) {
                     if (finalError.includes('No conversation found')) {
                         reject(new Error('No conversation found'));
@@ -175,15 +183,8 @@ export class ClaudeCodeDriver extends IDriver {
         }
     }
 
-    onStream(cb) {
-        this.streamCb = cb;
-    }
-
-    onError(cb) {
-        this.errorCb = cb;
-    }
-
-    onComplete(cb) {
-        this.completeCb = cb;
-    }
+    onStream(cb)    { this.streamCb = cb; }
+    onProgress(cb)  { this.progressCb = cb; }
+    onError(cb)     { this.errorCb = cb; }
+    onComplete(cb)  { this.completeCb = cb; }
 }

@@ -86,7 +86,7 @@ export class DeleteCommand extends ICommand {
 
 export class ListAgentsCommand extends ICommand {
     match(payload) {
-        return typeof payload === 'string' && payload.trim() === '/agents';
+        return typeof payload === 'string' && ['/agents', '/list', '/ls'].includes(payload.trim());
     }
 
     async execute({ sessionId, registry, eventBus }) {

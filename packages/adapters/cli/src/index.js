@@ -42,9 +42,14 @@ export class CLIAdapter extends IAdapter {
         console.log('[CLIAdapter] Stopped.');
     }
 
+    async sendChunk(sessionId, chunk) {
+        process.stdout.write(chunk);
+    }
+
     async sendMessage(sessionId, payload) {
-        // Output the stream chunk without newlines
-        process.stdout.write(payload);
+        // Called when a response is fully complete — re-show the prompt
+        console.log();
+        if (this.rl) this.rl.prompt();
     }
 
     onMessage(cb) {

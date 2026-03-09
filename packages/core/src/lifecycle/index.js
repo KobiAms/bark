@@ -18,24 +18,22 @@ export class LifecycleManager {
      */
     async start() {
         if (this.isStarted) return;
-        
+
         console.log('[LifecycleManager] Starting Bark Core...');
         this.router.start();
-        
-        const adapters = this.registry.getAllAdapters();
-        const startPromises = adapters.map(adapter => adapter.start().catch(err => {
-            console.error('[LifecycleManager] Failed to start adapter:', err);
-        }));
 
-        await Promise.all(startPromises);
+        const adapters = this.registry.getAllAdapters();
+        await Promise.all(adapters.map(adapter => adapter.start().catch(err => {
+            console.error('[LifecycleManager] Failed to start adapter:', err);
+        })));
+
         this.isStarted = true;
-        
-        this.eventBus.publish({
-            type: 'core.started',
-            sessionId: 'system',
-            timestamp: new Date()
-        });
+
+        this.eventBus.publish({ type: 'core.started', sessionId: 'system', timestamp: new Date() });
         console.log('[LifecycleManager] Bark Core started.');
+
+        // Announce to all connected adapters that the core is online
+        await Promise.all(adapters.map(adapter => adapter.announce('✅ Bark Core is online!').catch(() => {})));
     }
 
     /**

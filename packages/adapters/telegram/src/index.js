@@ -55,19 +55,54 @@ export class TelegramAdapter extends IAdapter {
     }
 
     async sendMessage(sessionId, payload) {
-        if (!this.chatId) return; // Cannot send if chat is unknown
-        
-        // For streams, Telegram doesn't do true typing, it sends chunks.
-        // We will just send the payload as a new message for now.
-        // In a more complex implementation, we'd cache the message ID and edit it.
+        if (!this.chatId) return;
         try {
-            await this._api('sendMessage', {
+            const result = await this._api('sendMessage', {
                 chat_id: this.chatId,
-                text: payload
+                text: payload,
+                parse_mode: 'Markdown',
+            });
+            return { messageId: String(result.message_id) };
+        } catch (err) {
+            // Retry as plain text if Markdown parse fails
+            try {
+                const result = await this._api('sendMessage', {
+                    chat_id: this.chatId,
+                    text: payload,
+                });
+                return { messageId: String(result.message_id) };
+            } catch (err2) {
+                console.error('[TelegramAdapter] Send failed:', err2.message);
+            }
+        }
+    }
+
+    async editMessage(sessionId, messageId, text) {
+        if (!this.chatId || !messageId) return;
+        try {
+            await this._api('editMessageText', {
+                chat_id: this.chatId,
+                message_id: Number(messageId),
+                text,
+                parse_mode: 'Markdown',
             });
         } catch (err) {
-            console.error('[TelegramAdapter] Send failed:', err.message);
+            // Retry as plain text if Markdown parse fails
+            if (err.message?.includes('parse')) {
+                try {
+                    await this._api('editMessageText', {
+                        chat_id: this.chatId,
+                        message_id: Number(messageId),
+                        text,
+                    });
+                } catch { /* ignore */ }
+            }
         }
+    }
+
+    async announce(text) {
+        if (!this.chatId) return;
+        await this._api('sendMessage', { chat_id: this.chatId, text }).catch(() => {});
     }
 
     onMessage(cb) {

@@ -3,9 +3,14 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/core",
+    "packages/adapters/*",
+    "packages/drivers/*",
+    "packages/storages/*",
+    "packages/commands/*"
   ],
   "scripts": {
-    "start": "node --env-file=.env examples/full-stack.js"
+    "start": "bash start.sh",
+    "start:once": "node --env-file=.env examples/full-stack.js"
   }
 }

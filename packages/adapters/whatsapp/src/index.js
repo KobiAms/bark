@@ -184,17 +184,25 @@ export class WhatsAppAdapter extends IAdapter {
 
     async sendMessage(sessionId, payload) {
         if (!this.groupChat) throw new Error('[WhatsAppAdapter] not connected to target group');
-        
         const text = typeof payload === 'string' ? payload : payload.text || '';
-        const opts = {};
-        
-        // Abstracted editing/reply logic would go here, looking up `payload.replyToId` etc.
-        const sent = await this.groupChat.sendMessage(text, opts);
-        
-        // We cache the message so the Engine can emit edit chunks later
+        const sent = await this.groupChat.sendMessage(text);
         this.msgCache.set(sent.id._serialized, sent);
-        
         return { messageId: sent.id._serialized };
+    }
+
+    async editMessage(sessionId, messageId, text) {
+        const cached = this.msgCache.get(messageId);
+        if (!cached) return;
+        try {
+            await cached.edit(text);
+        } catch (err) {
+            console.error('[WhatsAppAdapter] Edit failed:', err.message);
+        }
+    }
+
+    async announce(text) {
+        if (!this.groupChat) return;
+        await this.groupChat.sendMessage(text).catch(() => {});
     }
 
     onMessage(cb) {

@@ -1,10 +1,10 @@
 /**
  * Represents a normalized event within the Bark orchestration layer.
- * 
+ *
  * @typedef {Object} BarkEvent
  * @property {string} type - Event type (e.g., 'message.received', 'stream.chunk', 'error.occurred')
  * @property {string} sessionId - Identifier for the conversation/user
- * @property {string} [agentId] - Associated agent identifier, if applicable
+ * @property {string} [adapterName] - The name of the adapter that originated this event (injected by BarkCore)
  * @property {string} payload - The message text
  * @property {Object} [quotedMessageMetadata] - Optional metadata about a message being replied to
  * @property {string} [quotedMessageMetadata.senderName] - The name of the agent or user being replied to
@@ -40,12 +40,45 @@ export class IAdapter {
     async stop() { throw new NotImplementedError('stop'); }
 
     /**
-     * Send a normalized payload back to the originating session.
+     * Send a complete message back to the originating session.
+     * Called by core when a driver or command finishes its response.
+     * May return { messageId } for adapters that support live editing — core stores
+     * this to issue subsequent editMessage calls. Returning nothing is valid.
      * @param {string} sessionId
      * @param {any} payload
-     * @returns {Promise<void>}
+     * @returns {Promise<{messageId?: string}|void>}
      */
     async sendMessage(sessionId, payload) { throw new NotImplementedError('sendMessage'); }
+
+    /**
+     * Edit a previously sent message in-place (for live progress updates).
+     * Only called if sendMessage returned a messageId. No-op by default — adapters
+     * that don't support editing simply inherit this and do nothing.
+     * @param {string} sessionId
+     * @param {string} messageId
+     * @param {string} text
+     * @returns {Promise<void>}
+     */
+    async editMessage(sessionId, messageId, text) { /* no-op by default */ }
+
+    /**
+     * Send a single streaming chunk back to the originating session.
+     * Called by core for every stream.chunk event. Adapters that don't support
+     * streaming can leave this as a no-op (default behavior).
+     * @param {string} sessionId
+     * @param {string} chunk
+     * @returns {Promise<void>}
+     */
+    async sendChunk(sessionId, chunk) { /* no-op by default */ }
+
+    /**
+     * Broadcast a message to the adapter's configured channel without a sessionId.
+     * Used for system announcements (e.g. "✅ Bark Core is online!" after restart).
+     * No-op by default — adapters that don't have a fixed channel can skip this.
+     * @param {string} text
+     * @returns {Promise<void>}
+     */
+    async announce(text) { /* no-op by default */ }
 
     /**
      * Register a callback for incoming messages from the platform.
@@ -99,6 +132,14 @@ export class IDriver {
      * @param {function({sessionId: string, chunk: string}):void} cb
      */
     onStream(cb) { throw new NotImplementedError('onStream'); }
+
+    /**
+     * Register a callback for intermediate progress updates (thinking, tool calls).
+     * Called more frequently than onStream — used for live message editing.
+     * Optional: drivers that don't implement progress simply never call this.
+     * @param {function({sessionId: string, progressText: string}):void} cb
+     */
+    onProgress(cb) { /* no-op by default */ }
 
     /**
      * Register a callback for driver-level errors.

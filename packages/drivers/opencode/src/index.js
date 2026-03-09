@@ -1,6 +1,7 @@
 import { IDriver } from '@bark/core';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
+import { parseLine, buildProgressText } from './parser.js';
 
 export class OpenCodeDriver extends IDriver {
     /**
@@ -11,14 +12,14 @@ export class OpenCodeDriver extends IDriver {
         super();
         this.cwd = config.cwd || process.cwd();
         this.activeSessions = new Map();
-        
+
         this.streamCb = null;
+        this.progressCb = null;
         this.errorCb = null;
         this.completeCb = null;
     }
 
     _getUuid(sessionId) {
-        // Deterministic hash to map sessionId to a stable UUID for opencode's --session
         const hash = crypto.createHash('sha256').update(sessionId).digest('hex');
         return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
     }
@@ -29,20 +30,16 @@ export class OpenCodeDriver extends IDriver {
 
     async sendCommand(sessionId, prompt, systemPrompt = null) {
         const uuid = this._getUuid(sessionId);
-        const args = ['run'];
 
-        const fullPrompt = systemPrompt 
+        const fullPrompt = systemPrompt
             ? `[SYSTEM CONTEXT: ${systemPrompt}]\n\nUser Request: ${prompt}`
             : prompt;
 
-        // OpenCode natively supports resuming specific sessions via --session
-        args.push('--session', uuid);
-        args.push('--prompt', fullPrompt);
+        const args = ['run', '--session', uuid, '--format', 'json', '--prompt', fullPrompt];
 
-        // We run it as a standard child process capturing stdout
         return new Promise((resolve, reject) => {
             console.log(`[OpenCodeDriver] Executing opencode for session ${uuid}...`);
-            
+
             const child = spawn('opencode', args, {
                 cwd: this.cwd,
                 env: { ...process.env },
@@ -51,12 +48,50 @@ export class OpenCodeDriver extends IDriver {
 
             this.activeSessions.set(sessionId, child);
 
+            let buffer = '';
             let errorBuffer = '';
+            let finalResult = '';
+
+            // Progress state
+            let progressText = '';
+            const tools = [];
 
             child.stdout.on('data', (data) => {
-                const chunk = data.toString();
-                if (this.streamCb) {
-                    this.streamCb({ sessionId, chunk });
+                buffer += data.toString();
+                const lines = buffer.split(/\r?\n/);
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const event = parseLine(line);
+                    if (!event) continue;
+
+                    switch (event.type) {
+                        case 'text':
+                            if (this.streamCb) this.streamCb({ sessionId, chunk: event.text });
+                            progressText += event.text;
+                            if (this.progressCb) {
+                                this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
+                            }
+                            break;
+
+                        case 'thinking':
+                            progressText += event.text;
+                            if (this.progressCb) {
+                                this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
+                            }
+                            break;
+
+                        case 'tool':
+                            tools.push({ icon: event.icon, name: event.name });
+                            if (this.progressCb) {
+                                this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
+                            }
+                            break;
+
+                        case 'result':
+                            if (event.text) finalResult = event.text;
+                            break;
+                    }
                 }
             });
 
@@ -68,27 +103,20 @@ export class OpenCodeDriver extends IDriver {
                 this.activeSessions.delete(sessionId);
 
                 if (code !== 0 && code !== null) {
-                    // OpenCode might emit clean errors we want to pass up
                     console.error(`[OpenCodeDriver] Process exited with code ${code}: ${errorBuffer}`);
-                    if (this.errorCb) {
-                        this.errorCb({ sessionId, error: new Error(`Exit ${code}: ${errorBuffer}`) });
-                    }
+                    if (this.errorCb) this.errorCb({ sessionId, error: new Error(`Exit ${code}: ${errorBuffer}`) });
                     reject(new Error(`Exit ${code}`));
                     return;
                 }
 
-                if (this.completeCb) {
-                    this.completeCb({ sessionId });
-                }
+                if (this.completeCb) this.completeCb({ sessionId, result: finalResult });
                 resolve();
             });
 
             child.on('error', (err) => {
                 this.activeSessions.delete(sessionId);
                 console.error(`[OpenCodeDriver] Spawn error:`, err);
-                if (this.errorCb) {
-                    this.errorCb({ sessionId, error: err });
-                }
+                if (this.errorCb) this.errorCb({ sessionId, error: err });
                 reject(err);
             });
         });
@@ -104,21 +132,12 @@ export class OpenCodeDriver extends IDriver {
 
     async stop() {
         console.log(`[OpenCodeDriver] Stopping all ${this.activeSessions.size} active sessions...`);
-        for (const [sessionId, child] of this.activeSessions.entries()) {
-            child.kill('SIGKILL');
-        }
+        for (const child of this.activeSessions.values()) child.kill('SIGKILL');
         this.activeSessions.clear();
     }
 
-    onStream(cb) {
-        this.streamCb = cb;
-    }
-
-    onError(cb) {
-        this.errorCb = cb;
-    }
-
-    onComplete(cb) {
-        this.completeCb = cb;
-    }
+    onStream(cb)    { this.streamCb = cb; }
+    onProgress(cb)  { this.progressCb = cb; }
+    onError(cb)     { this.errorCb = cb; }
+    onComplete(cb)  { this.completeCb = cb; }
 }
