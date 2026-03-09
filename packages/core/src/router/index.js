@@ -88,7 +88,7 @@ export class MessageRouter {
                         this.eventBus.publish({ 
                             type: 'stream.chunk', 
                             sessionId, 
-                            chunk: `❓ Unknown pup: @${rawName}` 
+                            chunk: `❓ Unknown agent: @${rawName}` 
                         });
                         return;
                     }

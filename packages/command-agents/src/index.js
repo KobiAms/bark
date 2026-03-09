@@ -38,7 +38,7 @@ export class CreateCommand extends ICommand {
             systemPrompt
         });
 
-        const msg = `✅ Created pup: *${name}* using driver *${driver}*`;
+        const msg = `✅ Created agent: *${name}* using driver *${driver}*`;
         eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
         eventBus.publish({ type: 'command.complete', sessionId, result: msg });
     }
@@ -62,12 +62,12 @@ export class DeleteCommand extends ICommand {
 
         const agent = await agentRegistry.getAgent(name);
         if (!agent) {
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: `❌ Pup *${name}* not found.` });
+            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: `❌ Agent *${name}* not found.` });
             return;
         }
 
         await agentRegistry.deleteAgent(name);
-        const msg = `🗑️ Deleted pup: *${name}*`;
+        const msg = `🗑️ Deleted agent: *${name}*`;
         eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
         eventBus.publish({ type: 'command.complete', sessionId, result: msg });
     }
@@ -75,7 +75,7 @@ export class DeleteCommand extends ICommand {
 
 export class ListAgentsCommand extends ICommand {
     match(payload) {
-        return typeof payload === 'string' && (payload.trim() === '/pups' || payload.trim() === '/agents');
+        return typeof payload === 'string' && payload.trim() === '/agents';
     }
 
     async execute({ sessionId, registry, eventBus }) {
@@ -84,12 +84,12 @@ export class ListAgentsCommand extends ICommand {
 
         const agents = await agentRegistry.listAgents();
         if (agents.length === 0) {
-            const msg = '🐾 No pups registered yet. Use `/create <name>` to spawn one!';
+            const msg = '🐾 No agents registered yet. Use `/create <name>` to spawn one!';
             eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
             return;
         }
 
-        let msg = '🐕 *Active Pups:*\n';
+        let msg = '🤖 *Active Agents:*\n';
         agents.forEach(a => {
             msg += `- *${a.name}* (${a.driver})${a.systemPrompt ? ': ' + a.systemPrompt.substring(0, 50) + '...' : ''}\n`;
         });
