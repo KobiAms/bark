@@ -4,7 +4,7 @@ import { EchoDriver } from '@bark/driver-echo';
 import { ClaudeCodeDriver } from '@bark/driver-claude-code';
 import { MemoryStorage, MemoryAgentRegistry } from '@bark/storage-memory';
 import { PingCommand } from '@bark/command-ping';
-import { CreateCommand, DeleteCommand, ListAgentsCommand } from '@bark/command-agents';
+import { NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand } from '@bark/command-agents';
 import { SwitchDriverCommand } from '@bark/command-driver';
 import { TelegramAdapter } from '@bark/adapter-telegram';
 import { WhatsAppAdapter } from '@bark/adapter-whatsapp';
@@ -50,9 +50,10 @@ async function main() {
     console.log('Loading Commands...');
     bark.useCommand(new PingCommand());
     bark.useCommand(new SwitchDriverCommand());
-    bark.useCommand(new CreateCommand());
+    bark.useCommand(new NewCommand());
     bark.useCommand(new DeleteCommand());
     bark.useCommand(new ListAgentsCommand());
+    bark.useCommand(new RestartCommand());
 
     // Provide a way for the adapter to log back explicitly without looping
     // Note: stream.chunk events are only forwarded to the CLI adapter because Telegram and WhatsApp

@@ -1,8 +1,9 @@
 import { ICommand } from '@bark/core';
+export { RestartCommand } from './restart.js';
 
-export class CreateCommand extends ICommand {
+export class NewCommand extends ICommand {
     match(payload) {
-        return typeof payload === 'string' && payload.startsWith('/create');
+        return typeof payload === 'string' && payload.startsWith('/new');
     }
 
     async execute({ sessionId, payload, registry, eventBus }) {
@@ -13,7 +14,7 @@ export class CreateCommand extends ICommand {
             eventBus.publish({ 
                 type: 'stream.chunk', 
                 sessionId, 
-                chunk: '❌ Usage: /create <name> --prompt <prompt>' 
+                chunk: '❌ Usage: /new <name> --prompt <prompt>' 
             });
             return;
         }
@@ -94,7 +95,7 @@ export class ListAgentsCommand extends ICommand {
 
         const agents = await agentRegistry.listAgents();
         if (agents.length === 0) {
-            const msg = '🐾 No agents registered yet. Use `/create <name>` to spawn one!';
+            const msg = '🐾 No agents registered yet. Use `/new <name>` to spawn one!';
             eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
             return;
         }

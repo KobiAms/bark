@@ -53,17 +53,32 @@ export class MessageRouter {
                 }
             }
 
-            // 2. Mention Detection (@name)
-            const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
+            // 2. Routing Detection (Mentions vs Replies)
             let targetPayload = payload;
             let targetAgentName = null;
             let targetDriverName = this.defaultDriverName;
             let targetSystemPrompt = null;
+            
+            const agentRegistry = this.registry.getAgentRegistry();
+            const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
 
-            if (trimmedPayload.startsWith('@')) {
+            // A. Check for Reply-To Routing First
+            if (agentRegistry && event.quotedMessageMetadata && event.quotedMessageMetadata.senderName) {
+                const quotedName = event.quotedMessageMetadata.senderName;
+                const agent = await agentRegistry.getAgent(quotedName);
+                if (agent) {
+                    targetAgentName = quotedName;
+                    targetDriverName = agent.driver;
+                    targetSystemPrompt = agent.systemPrompt;
+                    // Keep the entire payload since the user didn't mention, they just replied
+                    targetPayload = trimmedPayload; 
+                }
+            }
+
+            // B. Fallback to Mention Detection (@name) if not a confirmed reply
+            if (!targetAgentName && trimmedPayload.startsWith('@')) {
                 const parts = trimmedPayload.split(/\s+/);
                 const rawName = parts[0].substring(1); // Remove '@'
-                const agentRegistry = this.registry.getAgentRegistry();
                 
                 if (agentRegistry) {
                     const agent = await agentRegistry.getAgent(rawName);

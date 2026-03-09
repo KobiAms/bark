@@ -3,9 +3,11 @@
  * 
  * @typedef {Object} BarkEvent
  * @property {string} type - Event type (e.g., 'message.received', 'stream.chunk', 'error.occurred')
- * @property {string} sessionId - Unique identifier mapping to a thread or conversation
+ * @property {string} sessionId - Identifier for the conversation/user
  * @property {string} [agentId] - Associated agent identifier, if applicable
- * @property {any} [payload] - Event-specific data payload
+ * @property {string} payload - The message text
+ * @property {Object} [quotedMessageMetadata] - Optional metadata about a message being replied to
+ * @property {string} [quotedMessageMetadata.senderName] - The name of the agent or user being replied to
  * @property {Error} [error] - Error object, if this is an error event
  * @property {Date} timestamp - Time the event occurred
  */
