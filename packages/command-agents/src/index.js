@@ -18,7 +18,11 @@ export class CreateCommand extends ICommand {
             return;
         }
 
-        const promptMatch = payload.match(/--prompt\s+(.+)$/);
+        const driverMatch = payload.match(/--driver\s+(\S+)/);
+        const driver = driverMatch ? driverMatch[1].trim() : (Array.from(registry.drivers.keys())[0] || 'claude');
+
+        const promptPayload = payload.replace(/--driver\s+\S+/, '');
+        const promptMatch = promptPayload.match(/--prompt\s+(.+)$/);
         const systemPrompt = promptMatch ? promptMatch[1].trim() : null;
 
         const agentRegistry = registry.getAgentRegistry();
@@ -31,7 +35,6 @@ export class CreateCommand extends ICommand {
             return;
         }
 
-        const driver = Array.from(registry.drivers.keys())[0] || 'claude';
 
         await agentRegistry.saveAgent(name, {
             driver,
@@ -67,7 +70,14 @@ export class DeleteCommand extends ICommand {
         }
 
         await agentRegistry.deleteAgent(name);
-        const msg = `🗑️ Deleted agent: *${name}*`;
+
+        // Clean up orphaned session memory
+        const storage = registry.getStorage();
+        if (storage && typeof storage.deleteSessionsByPrefix === 'function') {
+            await storage.deleteSessionsByPrefix(`${name}:`);
+        }
+
+        const msg = `🗑️ Deleted agent: *${name}* and its session memory.`;
         eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
         eventBus.publish({ type: 'command.complete', sessionId, result: msg });
     }

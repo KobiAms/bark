@@ -80,7 +80,7 @@ export class MessageRouter {
                             this.eventBus.publish({ 
                                 type: 'stream.chunk', 
                                 sessionId, 
-                                chunk: `🐾 @${rawName} is listening! What would you like to ask?` 
+                                chunk: `🤖 @${rawName} is listening! What would you like to ask?` 
                             });
                             return;
                         }

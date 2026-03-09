@@ -13,6 +13,18 @@ export class MemoryStorage extends IStorage {
     async saveSession(sessionId, state) {
         this.sessions.set(sessionId, state);
     }
+
+    async deleteSession(sessionId) {
+        this.sessions.delete(sessionId);
+    }
+
+    async deleteSessionsByPrefix(prefix) {
+        for (const sessionId of this.sessions.keys()) {
+            if (sessionId.startsWith(prefix)) {
+                this.sessions.delete(sessionId);
+            }
+        }
+    }
 }
 
 export class MemoryAgentRegistry extends IAgentRegistry {
