@@ -2,6 +2,8 @@ import { BarkCore } from '@bark/core';
 import { CLIAdapter } from '@bark/adapter-cli';
 import { EchoDriver } from '@bark/driver-echo';
 import { ClaudeCodeDriver } from '@bark/driver-claude-code';
+import { GeminiDriver } from '@bark/driver-gemini';
+import { OpenCodeDriver } from '@bark/driver-opencode';
 import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
 import path from 'path';
 import { PingCommand } from '@bark/command-ping';
@@ -26,6 +28,8 @@ async function main() {
     // 2. Drivers (AI plugins)
     console.log('Loading Drivers...');
     bark.useDriver('claude', new ClaudeCodeDriver({ model: 'haiku' })); // Default driver
+    bark.useDriver('gemini', new GeminiDriver());
+    bark.useDriver('opencode', new OpenCodeDriver());
     bark.useDriver('echo', new EchoDriver());
 
     // 3. Adapters (Platform plugins)

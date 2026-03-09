@@ -1,0 +1,9 @@
+{
+  "name": "@bark/driver-gemini",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}
