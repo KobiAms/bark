@@ -26,8 +26,8 @@ export class ExtensionRegistry {
      * @param {IAdapter} adapter 
      */
     registerAdapter(name, adapter) {
-        this._assertImplements(adapter, ['start', 'stop', 'sendMessage', 'onMessage', 'onError'], `Adapter '${name}'`);
-        
+        this._assertImplements(adapter, ['start', 'stop', 'sendMessage', 'editMessage', 'sendChunk', 'announce', 'onMessage', 'onError'], `Adapter '${name}'`);
+
         if (this.adapters.has(name)) {
             throw new Error(`Adapter '${name}' is already registered.`);
         }
@@ -39,7 +39,7 @@ export class ExtensionRegistry {
      * @param {IDriver} driver 
      */
     registerDriver(name, driver) {
-        this._assertImplements(driver, ['spawn', 'sendCommand', 'kill', 'onStream', 'onError', 'onComplete'], `Driver '${name}'`);
+        this._assertImplements(driver, ['spawn', 'sendCommand', 'kill', 'stop', 'onStream', 'onProgress', 'onError', 'onComplete'], `Driver '${name}'`);
 
         if (this.drivers.has(name)) {
             throw new Error(`Driver '${name}' is already registered.`);
@@ -51,7 +51,7 @@ export class ExtensionRegistry {
      * @param {IStorage} storage 
      */
     registerStorage(storage) {
-        this._assertImplements(storage, ['getSession', 'saveSession'], `Storage plugin`);
+        this._assertImplements(storage, ['getSession', 'saveSession', 'deleteSession', 'deleteSessionsByPrefix'], `Storage plugin`);
 
         if (this.storagePlugin) {
             console.warn(`[ExtensionRegistry] Overwriting existing Storage plugin.`);
