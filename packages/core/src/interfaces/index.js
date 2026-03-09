@@ -6,8 +6,10 @@
  * @property {string} sessionId - Identifier for the conversation/user
  * @property {string} [adapterName] - The name of the adapter that originated this event (injected by BarkCore)
  * @property {string} payload - The message text
+ * @property {string} [rawId] - The platform-specific ID of this message (for edits/replies)
  * @property {Object} [quotedMessageMetadata] - Optional metadata about a message being replied to
  * @property {string} [quotedMessageMetadata.senderName] - The name of the agent or user being replied to
+ * @property {string} [quotedMessageMetadata.messageId] - The platform-specific ID of the message being replied to
  * @property {Error} [error] - Error object, if this is an error event
  * @property {Date} timestamp - Time the event occurred
  */
@@ -46,9 +48,11 @@ export class IAdapter {
      * this to issue subsequent editMessage calls. Returning nothing is valid.
      * @param {string} sessionId
      * @param {any} payload
+     * @param {Object} [metadata]
+     * @param {string} [metadata.replyToMessageId]
      * @returns {Promise<{messageId?: string}|void>}
      */
-    async sendMessage(sessionId, payload) { throw new NotImplementedError('sendMessage'); }
+    async sendMessage(sessionId, payload, metadata = {}) { throw new NotImplementedError('sendMessage'); }
 
     /**
      * Edit a previously sent message in-place (for live progress updates).

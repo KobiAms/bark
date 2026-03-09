@@ -1,3 +1,5 @@
+const DRIVER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 export class MessageRouter {
     /**
      * @param {import('../bus/index.js').EventBus} eventBus
@@ -8,7 +10,7 @@ export class MessageRouter {
         this.registry = registry;
         this.defaultDriverName = null;
 
-        // Maps sessionId -> { adapterName, replyTo? }
+        // Maps sessionId -> { adapterName, replyTo?, lastMessageId? }
         this.sessionRouting = new Map();
 
         // Maps sessionId -> messageId of the live placeholder message (for editing)
@@ -39,7 +41,31 @@ export class MessageRouter {
         this._unsubs = [];
     }
 
+    // --- messageToAgent persistence ---
+    // Persisted via storage so reply-to routing survives restarts.
+
+    async _setMessageAgent(messageId, agentName) {
+        const storage = this.registry.getStorage();
+        if (!storage) return;
+        await storage.saveSession(`__mta:${messageId}`, { agentName }).catch(() => {});
+    }
+
+    async _getMessageAgent(messageId) {
+        const storage = this.registry.getStorage();
+        if (!storage) return null;
+        const data = await storage.getSession(`__mta:${messageId}`).catch(() => null);
+        return data?.agentName || null;
+    }
+
     // --- Routing helpers ---
+
+    _getAgentPrefix(sessionId) {
+        if (sessionId.includes(':')) {
+            const agentName = sessionId.split(':')[0];
+            return `*@${agentName}*\n\n`;
+        }
+        return '';
+    }
 
     _getAdapterAndReplyTo(sessionId) {
         const routing = this.sessionRouting.get(sessionId);
@@ -48,38 +74,47 @@ export class MessageRouter {
             adapter: this.registry.getAdapter(routing.adapterName),
             replyTo: routing.replyTo || sessionId,
             adapterName: routing.adapterName,
+            lastMessageId: routing.lastMessageId
         };
     }
 
-    /**
-     * Route a response payload back to the adapter that originated the session.
-     */
-    _routeResponse(sessionId, method, payload) {
-        if (payload == null) return;
+    async _replyToSender(sessionId, text) {
         const r = this._getAdapterAndReplyTo(sessionId);
         if (!r?.adapter) return;
-        r.adapter[method](r.replyTo, payload).catch(err =>
-            console.error(`[MessageRouter] Failed to route ${method} to adapter '${r.adapterName}':`, err)
+        await r.adapter.sendMessage(r.replyTo, text, { replyToMessageId: r.lastMessageId }).catch(err =>
+            console.error(`[MessageRouter] Failed to reply to session '${sessionId}':`, err)
         );
     }
 
     /**
-     * Send a one-off reply directly to the originating adapter via sendMessage.
-     * Used for router-generated messages (errors, hints) that are NOT streaming chunks.
+     * Edit the live placeholder if one exists, otherwise send a new message.
+     * Cleans up liveMessageIds and lastEditTime for the session.
      */
-    async _replyToSender(sessionId, text) {
-        const r = this._getAdapterAndReplyTo(sessionId);
-        if (!r?.adapter) return;
-        await r.adapter.sendMessage(r.replyTo, text).catch(err =>
-            console.error(`[MessageRouter] Failed to reply to session '${sessionId}':`, err)
-        );
+    async _editOrSend(effectiveSessionId, text) {
+        const r = this._getAdapterAndReplyTo(effectiveSessionId);
+        if (!r?.adapter) return null;
+
+        const messageId = this.liveMessageIds.get(effectiveSessionId);
+        this.liveMessageIds.delete(effectiveSessionId);
+        this.lastEditTime.delete(effectiveSessionId);
+
+        if (messageId) {
+            await r.adapter.editMessage(r.replyTo, messageId, text).catch(async () => {
+                await r.adapter.sendMessage(r.replyTo, text, { replyToMessageId: r.lastMessageId }).catch(() => {});
+            });
+            return messageId;
+        } else {
+            const sent = await r.adapter.sendMessage(r.replyTo, text, { replyToMessageId: r.lastMessageId }).catch(() => null);
+            return sent?.messageId || null;
+        }
     }
 
     async _onCommandComplete(event) {
         if (event.result == null) return;
         const r = this._getAdapterAndReplyTo(event.sessionId);
         if (!r?.adapter) return;
-        const sent = await r.adapter.sendMessage(r.replyTo, event.result).catch(() => null);
+        const prefix = this._getAgentPrefix(event.sessionId);
+        const sent = await r.adapter.sendMessage(r.replyTo, prefix + event.result, { replyToMessageId: r.lastMessageId }).catch(() => null);
         if (sent?.messageId) {
             this.liveMessageIds.set(event.sessionId, sent.messageId);
         }
@@ -87,13 +122,13 @@ export class MessageRouter {
 
     _onStreamChunk(event) {
         if (event.chunk == null) return;
-        this._routeResponse(event.sessionId, 'sendChunk', event.chunk);
+        const r = this._getAdapterAndReplyTo(event.sessionId);
+        if (!r?.adapter) return;
+        r.adapter.sendChunk(r.replyTo, event.chunk).catch(err =>
+            console.error(`[MessageRouter] Failed to route sendChunk to adapter '${r.adapterName}':`, err)
+        );
     }
 
-    /**
-     * Throttled live progress edit.
-     * Edits the placeholder message in-place if the adapter supports it.
-     */
     _onStreamProgress(event) {
         if (!event.progressText) return;
         const r = this._getAdapterAndReplyTo(event.sessionId);
@@ -107,30 +142,26 @@ export class MessageRouter {
         if (Date.now() - lastEdit < throttleMs) return;
 
         this.lastEditTime.set(event.sessionId, Date.now());
-        r.adapter.editMessage(r.replyTo, messageId, event.progressText).catch(() => {});
+        const prefix = this._getAgentPrefix(event.sessionId);
+        r.adapter.editMessage(r.replyTo, messageId, prefix + event.progressText).catch(() => {});
     }
 
-    /**
-     * On driver complete: do a final edit if we have a live message, otherwise send fresh.
-     */
-    _onDriverComplete(event) {
+    async _onDriverComplete(event) {
         if (event.result == null) return;
-        const r = this._getAdapterAndReplyTo(event.sessionId);
-        if (!r?.adapter) return;
 
-        const messageId = this.liveMessageIds.get(event.sessionId);
-        this.liveMessageIds.delete(event.sessionId);
-        this.lastEditTime.delete(event.sessionId);
+        const prefix = this._getAgentPrefix(event.sessionId);
+        const result = prefix + (event.result.trim() || 'Done.');
 
-        if (messageId) {
-            r.adapter.editMessage(r.replyTo, messageId, event.result).catch(() => {
-                // Fallback: if edit fails, send as new message
-                r.adapter.sendMessage(r.replyTo, event.result).catch(() => {});
-            });
-        } else {
-            r.adapter.sendMessage(r.replyTo, event.result).catch(err =>
-                console.error(`[MessageRouter] Failed to send complete to adapter '${r.adapterName}':`, err)
-            );
+        const sentMessageId = await this._editOrSend(event.sessionId, result);
+
+        // Persist messageId → agentName so reply-to routing works after restart
+        if (sentMessageId && event.sessionId.includes(':')) {
+            const agentName = event.sessionId.split(':')[0];
+            const agentRegistry = this.registry.getAgentRegistry();
+            const agent = agentRegistry ? await agentRegistry.getAgent(agentName).catch(() => null) : null;
+            if (agent) {
+                await this._setMessageAgent(sentMessageId, agentName);
+            }
         }
     }
 
@@ -148,7 +179,7 @@ export class MessageRouter {
         }
 
         // Store routing info for this session so responses go back to the right adapter
-        this.sessionRouting.set(sessionId, { adapterName });
+        this.sessionRouting.set(sessionId, { adapterName, lastMessageId: event.rawId });
 
         try {
             // 1. Check for commands
@@ -175,19 +206,32 @@ export class MessageRouter {
             const agentRegistry = this.registry.getAgentRegistry();
             const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
 
-            // A. Reply-To Routing
-            if (agentRegistry && event.quotedMessageMetadata?.senderName) {
-                const quotedName = event.quotedMessageMetadata.senderName;
-                const agent = await agentRegistry.getAgent(quotedName);
+            // A. Reply-To Routing — persisted, survives restart
+            if (agentRegistry && event.quotedMessageMetadata?.messageId) {
+                const agentName = await this._getMessageAgent(event.quotedMessageMetadata.messageId);
+                if (agentName) {
+                    const agent = await agentRegistry.getAgent(agentName);
+                    if (agent) {
+                        targetAgentName = agentName;
+                        targetDriverName = agent.driver;
+                        targetSystemPrompt = agent.systemPrompt;
+                        targetPayload = trimmedPayload;
+                    }
+                }
+            }
+
+            // B. senderName fallback (for clients that don't expose messageId)
+            if (!targetAgentName && agentRegistry && event.quotedMessageMetadata?.senderName) {
+                const agent = await agentRegistry.getAgent(event.quotedMessageMetadata.senderName);
                 if (agent) {
-                    targetAgentName = quotedName;
+                    targetAgentName = event.quotedMessageMetadata.senderName;
                     targetDriverName = agent.driver;
                     targetSystemPrompt = agent.systemPrompt;
                     targetPayload = trimmedPayload;
                 }
             }
 
-            // B. Mention Detection (@name)
+            // C. Mention Detection (@name)
             if (!targetAgentName && trimmedPayload.startsWith('@')) {
                 const parts = trimmedPayload.split(/\s+/);
                 const rawName = parts[0].substring(1);
@@ -203,7 +247,7 @@ export class MessageRouter {
                         targetPayload = payload.substring(nameIndex + rawName.length + 1).trim();
 
                         if (!targetPayload) {
-                            await this._replyToSender(sessionId, `🤖 @${rawName} is listening! What would you like to ask?`);
+                            await this._replyToSender(sessionId, `*@${rawName}* is listening! What would you like to ask?`);
                             return;
                         }
                     } else {
@@ -214,11 +258,14 @@ export class MessageRouter {
             }
 
             // 3. Session Management
-            const effectiveSessionId = targetAgentName || sessionId;
+            const effectiveSessionId = targetAgentName ? `${targetAgentName}:${sessionId}` : sessionId;
 
-            // For agent sessions, store routing so replies go back to the originating user session
             if (targetAgentName) {
-                this.sessionRouting.set(effectiveSessionId, { adapterName, replyTo: sessionId });
+                this.sessionRouting.set(effectiveSessionId, {
+                    adapterName,
+                    replyTo: sessionId,
+                    lastMessageId: event.rawId
+                });
             }
 
             let session = await storage.getSession(effectiveSessionId);
@@ -231,31 +278,53 @@ export class MessageRouter {
                 await storage.saveSession(effectiveSessionId, session);
             }
 
-            const driverName = session.driverName;
-            const driver = this.registry.getDriver(driverName);
-
+            const driver = this.registry.getDriver(session.driverName);
             if (!driver) {
-                console.error(`[MessageRouter] Driver '${driverName}' not found.`);
-                this.eventBus.publish({ type: 'error.occurred', sessionId: effectiveSessionId, error: new Error(`Driver ${driverName} not found`) });
+                console.error(`[MessageRouter] Driver '${session.driverName}' not found.`);
+                await this._replyToSender(sessionId, `❌ Driver '${session.driverName}' not found.`);
                 return;
             }
 
-            // 4. Route to Driver
-            // Send a "thinking..." placeholder and store its messageId for live editing
+            // 4. Send thinking placeholder and store messageId for live edits
             const routing = this.sessionRouting.get(effectiveSessionId);
             if (routing) {
                 const adapter = this.registry.getAdapter(routing.adapterName);
                 const replyTo = routing.replyTo || effectiveSessionId;
                 if (adapter) {
-                    const sent = await adapter.sendMessage(replyTo, '_thinking..._').catch(() => null);
+                    const prefix = this._getAgentPrefix(effectiveSessionId);
+                    const sent = await adapter.sendMessage(replyTo, prefix + '_thinking..._', { replyToMessageId: routing.lastMessageId }).catch(() => null);
                     if (sent?.messageId) {
                         this.liveMessageIds.set(effectiveSessionId, sent.messageId);
+                        // Persist thinking message → agent mapping too (for immediate reply-to)
+                        if (targetAgentName) {
+                            await this._setMessageAgent(sent.messageId, targetAgentName);
+                        }
                     }
                 }
             }
 
+            // 5. Run driver with timeout
             this.eventBus.publish({ type: 'driver.thinking', sessionId: effectiveSessionId });
-            await driver.sendCommand(effectiveSessionId, targetPayload, targetSystemPrompt);
+
+            try {
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(Object.assign(
+                        new Error('⏱️ No response after 5 minutes. The session was cancelled.'),
+                        { isTimeout: true }
+                    )), DRIVER_TIMEOUT_MS)
+                );
+                await Promise.race([
+                    driver.sendCommand(effectiveSessionId, targetPayload, targetSystemPrompt),
+                    timeoutPromise
+                ]);
+            } catch (driverError) {
+                if (driverError.isTimeout) {
+                    await driver.kill(effectiveSessionId).catch(() => {});
+                } else {
+                    console.error(`[MessageRouter] Driver error for session ${effectiveSessionId}:`, driverError);
+                }
+                await this._editOrSend(effectiveSessionId, `❌ ${driverError.message}`);
+            }
 
         } catch (error) {
             console.error(`[MessageRouter] Error processing message for session ${sessionId}:`, error);

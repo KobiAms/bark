@@ -54,22 +54,30 @@ export class TelegramAdapter extends IAdapter {
         console.log('[TelegramAdapter] Stopped.');
     }
 
-    async sendMessage(sessionId, payload) {
+    async sendMessage(sessionId, payload, metadata = {}) {
         if (!this.chatId) return;
         try {
-            const result = await this._api('sendMessage', {
+            const body = {
                 chat_id: this.chatId,
                 text: payload,
                 parse_mode: 'Markdown',
-            });
+            };
+            if (metadata.replyToMessageId) {
+                body.reply_to_message_id = Number(metadata.replyToMessageId);
+            }
+            const result = await this._api('sendMessage', body);
             return { messageId: String(result.message_id) };
         } catch (err) {
             // Retry as plain text if Markdown parse fails
             try {
-                const result = await this._api('sendMessage', {
+                const body = {
                     chat_id: this.chatId,
                     text: payload,
-                });
+                };
+                if (metadata.replyToMessageId) {
+                    body.reply_to_message_id = Number(metadata.replyToMessageId);
+                }
+                const result = await this._api('sendMessage', body);
                 return { messageId: String(result.message_id) };
             } catch (err2) {
                 console.error('[TelegramAdapter] Send failed:', err2.message);
@@ -168,11 +176,23 @@ export class TelegramAdapter extends IAdapter {
                     if (!text.trim()) continue;
 
                     if (this.messageCb) {
+                        let quotedMessageMetadata = null;
+                        if (msg.reply_to_message) {
+                            const q = msg.reply_to_message;
+                            const from = q.from || {};
+                            quotedMessageMetadata = {
+                                senderName: from.username || from.first_name || 'unknown',
+                                messageId: String(q.message_id)
+                            };
+                        }
+
                         this.messageCb({
                             type: 'message.received',
-                            sessionId: `tg-${this.chatId}`, // We use the group chat ID as the session
+                            sessionId: `tg-${this.chatId}`,
                             payload: text,
-                            senderId: String(msg.from?.id || 'unknown')
+                            senderId: String(msg.from?.id || 'unknown'),
+                            rawId: String(msg.message_id),
+                            quotedMessageMetadata
                         });
                     }
                 }

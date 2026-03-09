@@ -53,18 +53,28 @@ export class LifecycleManager {
 
         try {
             const pendingData = await storage.getSession('__restart_pending__').catch(() => null);
-            if (!pendingData?.adapterName || !pendingData?.messageId) return null;
+            if (!pendingData) return null;
 
             await storage.deleteSession('__restart_pending__').catch(() => {});
 
-            const adapter = this.registry.getAdapter(pendingData.adapterName);
-            if (adapter) {
-                await adapter.editMessage(pendingData.sessionId, pendingData.messageId, '✅ Bark Core is online!').catch(err => {
-                    console.error('[LifecycleManager] Failed to edit restart message:', err);
-                    return null;
-                });
-                return pendingData.adapterName;
+            // Support both formats: single object or array of restarts
+            const restarts = Array.isArray(pendingData.pendingRestarts) 
+                ? pendingData.pendingRestarts 
+                : (pendingData.adapterName ? [pendingData] : []);
+
+            let lastEditedAdapter = null;
+            for (const item of restarts) {
+                if (!item.adapterName || !item.messageId) continue;
+                
+                const adapter = this.registry.getAdapter(item.adapterName);
+                if (adapter) {
+                    await adapter.editMessage(item.sessionId, item.messageId, '✅ Bark Core is online!').catch(err => {
+                        console.error(`[LifecycleManager] Failed to edit restart message for ${item.adapterName}:`, err);
+                    });
+                    lastEditedAdapter = item.adapterName;
+                }
             }
+            return lastEditedAdapter;
         } catch (err) {
             console.error('[LifecycleManager] Error processing pending restarts:', err);
         }

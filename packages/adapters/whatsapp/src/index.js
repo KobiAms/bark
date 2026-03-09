@@ -145,7 +145,10 @@ export class WhatsAppAdapter extends IAdapter {
                 const contact = await quotedMsg.getContact();
                 const senderName = contact.pushname || contact.name || contact.shortName;
                 if (senderName) {
-                    quotedMessageMetadata = { senderName };
+                    quotedMessageMetadata = { 
+                        senderName,
+                        messageId: quotedMsg.id._serialized
+                    };
                 }
             } catch (err) {
                 console.warn(`[WhatsAppAdapter] Failed to fetch quoted message data: ${err.message}`);
@@ -182,10 +185,16 @@ export class WhatsAppAdapter extends IAdapter {
         }
     }
 
-    async sendMessage(sessionId, payload) {
+    async sendMessage(sessionId, payload, metadata = {}) {
         if (!this.groupChat) throw new Error('[WhatsAppAdapter] not connected to target group');
         const text = typeof payload === 'string' ? payload : payload.text || '';
-        const sent = await this.groupChat.sendMessage(text);
+        
+        const options = {};
+        if (metadata.replyToMessageId) {
+            options.quotedMessageId = metadata.replyToMessageId;
+        }
+
+        const sent = await this.groupChat.sendMessage(text, options);
         this.msgCache.set(sent.id._serialized, sent);
         return { messageId: sent.id._serialized };
     }
