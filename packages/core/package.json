@@ -1,0 +1,13 @@
+{
+  "name": "@bark/core",
+  "version": "1.0.0",
+  "description": "Thin, agnostic core orchestration for Bark agents",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  }
+}

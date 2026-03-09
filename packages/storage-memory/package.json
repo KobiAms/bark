@@ -1,0 +1,10 @@
+{
+  "name": "@bark/storage-memory",
+  "version": "1.0.0",
+  "description": "In-memory default storage plugin for Bark",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}

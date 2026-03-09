@@ -1,0 +1,10 @@
+{
+  "name": "@bark/command-ping",
+  "version": "1.0.0",
+  "description": "A simple ping command for testing Bark architecture",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}

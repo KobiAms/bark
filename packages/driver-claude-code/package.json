@@ -1,0 +1,11 @@
+{
+  "name": "@bark/driver-claude-code",
+  "version": "1.0.0",
+  "description": "Claude Code driver for Bark orchestration",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*",
+    "node-pty": "^1.1.0"
+  }
+}

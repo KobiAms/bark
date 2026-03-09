@@ -1,0 +1,1 @@
+# @bark/driver-claude-code\n\nClaude Code driver for Bark orchestration\n\nSee the [root README](../../README.md) for full documentation and architecture details.

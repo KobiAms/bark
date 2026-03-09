@@ -1,0 +1,11 @@
+{
+  "name": "bark-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "node --env-file=.env examples/full-stack.js"
+  }
+}

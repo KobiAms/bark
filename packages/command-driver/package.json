@@ -1,0 +1,10 @@
+{
+  "name": "@bark/command-driver",
+  "version": "1.0.0",
+  "description": "A command to switch active drivers for a session",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}

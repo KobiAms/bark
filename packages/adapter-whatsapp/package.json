@@ -1,0 +1,13 @@
+{
+  "name": "@bark/adapter-whatsapp",
+  "version": "1.0.0",
+  "description": "WhatsApp adapter for BarkCore using whatsapp-web.js",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*",
+    "qrcode": "^1.5.3",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  }
+}

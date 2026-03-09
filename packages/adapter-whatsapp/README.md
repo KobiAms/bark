@@ -1,0 +1,1 @@
+# @bark/adapter-whatsapp\n\nWhatsApp adapter for BarkCore using whatsapp-web.js\n\nSee the [root README](../../README.md) for full documentation and architecture details.

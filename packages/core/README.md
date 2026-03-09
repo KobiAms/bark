@@ -1,0 +1,1 @@
+# @bark/core\n\nThin, agnostic core orchestration for Bark agents\n\nSee the [root README](../../README.md) for full documentation and architecture details.

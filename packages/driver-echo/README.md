@@ -1,0 +1,1 @@
+# @bark/driver-echo\n\nMock Echo driver for Bark orchestration\n\nSee the [root README](../../README.md) for full documentation and architecture details.

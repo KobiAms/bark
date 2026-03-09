@@ -1,0 +1,163 @@
+/**
+ * Represents a normalized event within the Bark orchestration layer.
+ * 
+ * @typedef {Object} BarkEvent
+ * @property {string} type - Event type (e.g., 'message.received', 'stream.chunk', 'error.occurred')
+ * @property {string} sessionId - Unique identifier mapping to a thread or conversation
+ * @property {string} [agentId] - Associated agent identifier, if applicable
+ * @property {any} [payload] - Event-specific data payload
+ * @property {Error} [error] - Error object, if this is an error event
+ * @property {Date} timestamp - Time the event occurred
+ */
+
+/**
+ * Thrown when an interface method is not implemented.
+ */
+class NotImplementedError extends Error {
+    constructor(methodName) {
+        super(`Method '${methodName}' must be implemented.`);
+        this.name = 'NotImplementedError';
+    }
+}
+
+/**
+ * IAdapter Contract
+ * Connects external platforms (e.g. WhatsApp, Telegram) to the Bark Core.
+ */
+export class IAdapter {
+    /**
+     * Start the adapter and connect to the underlying platform.
+     * @returns {Promise<void>}
+     */
+    async start() { throw new NotImplementedError('start'); }
+
+    /**
+     * Stop the adapter and gracefully disconnect.
+     * @returns {Promise<void>}
+     */
+    async stop() { throw new NotImplementedError('stop'); }
+
+    /**
+     * Send a normalized payload back to the originating session.
+     * @param {string} sessionId
+     * @param {any} payload
+     * @returns {Promise<void>}
+     */
+    async sendMessage(sessionId, payload) { throw new NotImplementedError('sendMessage'); }
+
+    /**
+     * Register a callback for incoming messages from the platform.
+     * @param {function(BarkEvent):void} cb
+     */
+    onMessage(cb) { throw new NotImplementedError('onMessage'); }
+
+    /**
+     * Register a callback for adapter-level errors.
+     * @param {function(Error):void} cb
+     */
+    onError(cb) { throw new NotImplementedError('onError'); }
+}
+
+/**
+ * IDriver Contract
+ * Interfaces with a specific AI Agent Runtime (e.g. Claude Code, Gemini).
+ */
+export class IDriver {
+    /**
+     * Spawn or warm up a runtime process with the given configuration.
+     * @param {Object} config
+     * @returns {Promise<void>}
+     */
+    async spawn(config) { throw new NotImplementedError('spawn'); }
+
+    /**
+     * Stop the runtime and cleanly kill all active sessions.
+     * @returns {Promise<void>}
+     */
+    async stop() { throw new NotImplementedError('stop'); }
+
+    /**
+     * Send a command/prompt to the runtime.
+     * @param {string} sessionId
+     * @param {string} cmd
+     * @returns {Promise<void>}
+     */
+    async sendCommand(sessionId, cmd) { throw new NotImplementedError('sendCommand'); }
+
+    /**
+     * Kill the runtime process for the given session.
+     * @param {string} sessionId
+     * @returns {Promise<void>}
+     */
+    async kill(sessionId) { throw new NotImplementedError('kill'); }
+
+    /**
+     * Register a callback for real-time text stream chunks.
+     * @param {function({sessionId: string, chunk: string}):void} cb
+     */
+    onStream(cb) { throw new NotImplementedError('onStream'); }
+
+    /**
+     * Register a callback for driver-level errors.
+     * @param {function(Error):void} cb
+     */
+    onError(cb) { throw new NotImplementedError('onError'); }
+
+    /**
+     * Register a callback when a command execution completes.
+     * @param {function({sessionId: string, result: any}):void} cb
+     */
+    onComplete(cb) { throw new NotImplementedError('onComplete'); }
+}
+
+/**
+ * IStorage Contract
+ * Pluggable state management (e.g. Memory, JSON, SQLite).
+ */
+export class IStorage {
+    /**
+     * @param {string} sessionId
+     * @returns {Promise<Object>}
+     */
+    async getSession(sessionId) { throw new NotImplementedError('getSession'); }
+
+    /**
+     * @param {string} sessionId
+     * @param {Object} state
+     * @returns {Promise<void>}
+     */
+    async saveSession(sessionId, state) { throw new NotImplementedError('saveSession'); }
+
+    /**
+     * @param {string} agentId
+     * @returns {Promise<Object>}
+     */
+    async getAgentState(agentId) { throw new NotImplementedError('getAgentState'); }
+
+    /**
+     * @param {string} agentId
+     * @param {Object} state
+     * @returns {Promise<void>}
+     */
+    async updateAgentState(agentId, state) { throw new NotImplementedError('updateAgentState'); }
+}
+
+/**
+ * ICommand Contract
+ * Intercepts specific intents to perform administrative or custom actions.
+ */
+export class ICommand {
+    /**
+     * Returns true if this command should handle the incoming message.
+     * @param {any} message
+     * @returns {boolean}
+     */
+    match(message) { throw new NotImplementedError('match'); }
+
+    /**
+     * Execute the command logic.
+     * @param {Object} commandContext
+     * @returns {Promise<any>}
+     */
+    async execute(commandContext) { throw new NotImplementedError('execute'); }
+}

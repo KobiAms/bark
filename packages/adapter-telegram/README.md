@@ -1,0 +1,1 @@
+# @bark/adapter-telegram\n\nTelegram adapter for Bark orchestration\n\nSee the [root README](../../README.md) for full documentation and architecture details.

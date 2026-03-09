@@ -1,0 +1,10 @@
+{
+  "name": "@bark/driver-echo",
+  "version": "1.0.0",
+  "description": "Mock Echo driver for Bark orchestration",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}

@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+build/
+dist/
+
+# Env storage
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# WhatsApp Web Auth session (CRITICAL: Do not commit)
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Bark Temporary files
+.bark-tmp/
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+*.log

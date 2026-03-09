@@ -1,0 +1,10 @@
+{
+  "name": "@bark/adapter-telegram",
+  "version": "1.0.0",
+  "description": "Telegram adapter for Bark orchestration",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}
