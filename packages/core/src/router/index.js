@@ -137,7 +137,10 @@ export class MessageRouter {
         const messageId = this.liveMessageIds.get(event.sessionId);
         if (!messageId) return;
 
-        const throttleMs = r.adapter.editThrottleMs ?? 2000;
+        // Thinking updates can be more frequent
+        const throttleMs = event.isThinking
+            ? (r.adapter.thinkingThrottleMs ?? 800)
+            : (r.adapter.editThrottleMs ?? 2000);
         const lastEdit = this.lastEditTime.get(event.sessionId) || 0;
         if (Date.now() - lastEdit < throttleMs) return;
 
