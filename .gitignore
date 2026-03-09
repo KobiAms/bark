@@ -23,6 +23,7 @@ dist/
 
 # Bark Temporary files
 .bark-tmp/
+.data/
 
 # OS/IDE
 .DS_Store
