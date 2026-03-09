@@ -1,0 +1,9 @@
+{
+  "name": "@bark/storage-jsonl",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}

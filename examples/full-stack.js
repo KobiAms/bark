@@ -1,8 +1,8 @@
 import { BarkCore } from '@bark/core';
 import { CLIAdapter } from '@bark/adapter-cli';
 import { EchoDriver } from '@bark/driver-echo';
-import { ClaudeCodeDriver } from '@bark/driver-claude-code';
-import { MemoryStorage, MemoryAgentRegistry } from '@bark/storage-memory';
+import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
+import path from 'path';
 import { PingCommand } from '@bark/command-ping';
 import { NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand } from '@bark/command-agents';
 import { SwitchDriverCommand } from '@bark/command-driver';
@@ -17,9 +17,10 @@ async function main() {
     const bark = new BarkCore();
 
     // 1. Storage & Registry
-    console.log('Loading Storage & Registry...');
-    bark.useStorage(new MemoryStorage());
-    bark.useAgentRegistry(new MemoryAgentRegistry());
+    const dbDir = path.resolve(process.cwd(), '.data');
+    console.log('Loading Storage Plugin...');
+    bark.useStorage(new JsonlStorage({ filePath: path.join(dbDir, 'sessions.jsonl') }));
+    bark.useAgentRegistry(new JsonlAgentRegistry({ filePath: path.join(dbDir, 'agents.jsonl') }));
 
     // 2. Drivers (AI plugins)
     console.log('Loading Drivers...');
