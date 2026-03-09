@@ -157,6 +157,7 @@ export class MessageRouter {
                     await command.execute({
                         sessionId,
                         payload,
+                        adapterName,
                         registry: this.registry,
                         eventBus: this.eventBus,
                         storage

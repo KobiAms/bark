@@ -9,15 +9,26 @@ export class RestartCommand extends ICommand {
         return { usage: '/restart', description: 'Restart Bark Core', group: 'System' };
     }
 
-    async execute({ sessionId, eventBus, registry }) {
-        eventBus.publish({ type: 'command.complete', sessionId, result: '🔄 Restarting Bark Core...' });
-        console.log(`[RestartCommand] Restart requested by session ${sessionId}`);
+    async execute({ sessionId, adapterName, registry, storage }) {
+        const storage_ = registry.getStorage() || storage;
+        const adapter = registry.getAdapter(adapterName);
 
-        // Announce availability using the same message as startup
-        setTimeout(async () => {
-            const adapters = registry.getAllAdapters();
-            await Promise.all(adapters.map(adapter => adapter.announce('✅ Bark Core is online!').catch(() => {})));
-            process.exit(0);
-        }, 1500);
+        console.log(`[RestartCommand] Restart requested by session ${sessionId} via adapter ${adapterName}`);
+
+        // Send restart message to the originating adapter and capture messageId
+        if (adapter) {
+            const sent = await adapter.sendMessage(sessionId, '🔄 Restarting Bark Core...').catch(() => null);
+
+            // Store the messageId so we can edit it when the service comes back up
+            if (sent?.messageId && storage_) {
+                await storage_.saveSession('__restart_pending__', {
+                    adapterName,
+                    sessionId,
+                    messageId: sent.messageId
+                }).catch(() => {});
+            }
+        }
+
+        setTimeout(() => process.exit(0), 1500);
     }
 }

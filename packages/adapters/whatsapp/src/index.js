@@ -191,10 +191,17 @@ export class WhatsAppAdapter extends IAdapter {
     }
 
     async editMessage(sessionId, messageId, text) {
-        const cached = this.msgCache.get(messageId);
-        if (!cached) return;
+        let msg = this.msgCache.get(messageId);
+        if (!msg) {
+            try {
+                msg = await this.client.getMessageById(messageId);
+            } catch {
+                console.warn('[WhatsAppAdapter] editMessage: message not found:', messageId);
+                return;
+            }
+        }
         try {
-            await cached.edit(text);
+            await msg.edit(text);
         } catch (err) {
             console.error('[WhatsAppAdapter] Edit failed:', err.message);
         }

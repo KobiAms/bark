@@ -32,8 +32,43 @@ export class LifecycleManager {
         this.eventBus.publish({ type: 'core.started', sessionId: 'system', timestamp: new Date() });
         console.log('[LifecycleManager] Bark Core started.');
 
-        // Announce to all connected adapters that the core is online
-        await Promise.all(adapters.map(adapter => adapter.announce('✅ Bark Core is online!').catch(() => {})));
+        // Edit any pending restart messages; returns the adapterName that was edited (if any)
+        const editedAdapterName = await this._editPendingRestarts();
+
+        // Announce to adapters that didn't already receive the restart edit
+        await Promise.all(
+            Array.from(this.registry.adapters.entries())
+                .filter(([name]) => name !== editedAdapterName)
+                .map(([, adapter]) => adapter.announce('✅ Bark Core is online!').catch(() => {}))
+        );
+    }
+
+    /**
+     * Edit any messages left pending from a restart command.
+     * @private
+     */
+    async _editPendingRestarts() {
+        const storage = this.registry.getStorage();
+        if (!storage) return null;
+
+        try {
+            const pendingData = await storage.getSession('__restart_pending__').catch(() => null);
+            if (!pendingData?.adapterName || !pendingData?.messageId) return null;
+
+            await storage.deleteSession('__restart_pending__').catch(() => {});
+
+            const adapter = this.registry.getAdapter(pendingData.adapterName);
+            if (adapter) {
+                await adapter.editMessage(pendingData.sessionId, pendingData.messageId, '✅ Bark Core is online!').catch(err => {
+                    console.error('[LifecycleManager] Failed to edit restart message:', err);
+                    return null;
+                });
+                return pendingData.adapterName;
+            }
+        } catch (err) {
+            console.error('[LifecycleManager] Error processing pending restarts:', err);
+        }
+        return null;
     }
 
     /**
