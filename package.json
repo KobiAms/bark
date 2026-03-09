@@ -11,6 +11,8 @@
   ],
   "scripts": {
     "start": "bash start.sh",
-    "start:once": "node --env-file=.env examples/full-stack.js"
+    "start:once": "node --env-file=.env examples/full-stack.js",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
   }
 }
