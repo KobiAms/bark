@@ -1,6 +1,7 @@
 import { BarkCore } from '@bark/core';
 import { CLIAdapter } from '@bark/adapter-cli';
 import { EchoDriver } from '@bark/driver-echo';
+import { ClaudeCodeDriver } from '@bark/driver-claude-code';
 import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
 import path from 'path';
 import { PingCommand } from '@bark/command-ping';
