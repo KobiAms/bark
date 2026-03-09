@@ -5,7 +5,7 @@ import { GeminiDriver } from '@bark/driver-gemini';
 import { OpenCodeDriver } from '@bark/driver-opencode';
 import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
 import path from 'path';
-import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand } from '@bark/commands-core';
+import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, CompactCommand } from '@bark/commands-core';
 import { TelegramAdapter } from '@bark/adapter-telegram';
 import { WhatsAppAdapter } from '@bark/adapter-whatsapp';
 
@@ -38,6 +38,7 @@ async function main() {
     bark.useCommand(new PingCommand());
     bark.useCommand(new SwitchDriverCommand());
     bark.useCommand(new StopCommand());
+    bark.useCommand(new CompactCommand());
     bark.useCommand(new NewCommand());
     bark.useCommand(new DeleteCommand());
     bark.useCommand(new ListAgentsCommand());

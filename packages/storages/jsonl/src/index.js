@@ -82,6 +82,16 @@ export class JsonlStorage extends IStorage {
         }
         await fsPromises.appendFile(this.filePath, JSON.stringify({ deletedByPrefix: true, prefix, timestamp: Date.now() }) + '\n');
     }
+
+    async compact() {
+        await this._ensureInitialized();
+        const lines = [];
+        for (const [sessionId, state] of this.sessions.entries()) {
+            lines.push(JSON.stringify({ sessionId, state, timestamp: Date.now() }));
+        }
+        await fsPromises.writeFile(this.filePath, lines.join('\n') + (lines.length > 0 ? '\n' : ''));
+        console.log(`[JsonlStorage] Compacted: ${lines.length} active sessions`);
+    }
 }
 
 export class JsonlAgentRegistry extends IAgentRegistry {
@@ -153,5 +163,15 @@ export class JsonlAgentRegistry extends IAgentRegistry {
             name,
             ...config
         }));
+    }
+
+    async compact() {
+        await this._ensureInitialized();
+        const lines = [];
+        for (const [name, config] of this.agents.entries()) {
+            lines.push(JSON.stringify({ name, config, timestamp: Date.now() }));
+        }
+        await fsPromises.writeFile(this.filePath, lines.join('\n') + (lines.length > 0 ? '\n' : ''));
+        console.log(`[JsonlAgentRegistry] Compacted: ${lines.length} agents`);
     }
 }

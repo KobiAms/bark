@@ -3,4 +3,5 @@ export { HelpCommand } from './help.js';
 export { SwitchDriverCommand } from './driver.js';
 export { RestartCommand } from './restart.js';
 export { StopCommand } from './stop.js';
+export { CompactCommand } from './compact.js';
 export { NewCommand, DeleteCommand, ListAgentsCommand } from './agents.js';
