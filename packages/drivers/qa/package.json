@@ -1,0 +1,13 @@
+{
+  "name": "@bark/driver-qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live QA harness for Bark drivers",
+  "type": "module",
+  "main": "harness.js",
+  "dependencies": {
+    "@bark/driver-claude-code": "*",
+    "@bark/driver-gemini": "*",
+    "@bark/driver-opencode": "*"
+  }
+}

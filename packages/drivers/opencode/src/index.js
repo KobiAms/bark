@@ -27,6 +27,10 @@ export class OpenCodeDriver extends IDriver {
     }
 
     async sendCommand(sessionId, prompt, systemPrompt = null) {
+        if (this.activeSessions.has(sessionId)) {
+            if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
+            return;
+        }
         const fullPrompt = systemPrompt
             ? `[SYSTEM CONTEXT: ${systemPrompt}]\n\nUser Request: ${prompt}`
             : prompt;
@@ -123,6 +127,7 @@ export class OpenCodeDriver extends IDriver {
 
                 if (this.killedSessions.has(sessionId)) {
                     this.killedSessions.delete(sessionId);
+                    reject(new Error('Session killed'));
                     return;
                 }
 

@@ -145,6 +145,7 @@ export class ClaudeCodeDriver extends IDriver {
                 // Suppress callbacks if this session was force-killed
                 if (this.killedSessions.has(sessionId)) {
                     this.killedSessions.delete(sessionId);
+                    reject(new Error('Session killed'));
                     return;
                 }
 

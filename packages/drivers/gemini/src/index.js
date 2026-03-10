@@ -1,6 +1,5 @@
 import { IDriver } from '@bark/core';
 import { spawn } from 'child_process';
-import crypto from 'crypto';
 import { parseLine, buildProgressText } from './parser.js';
 
 export class GeminiDriver extends IDriver {
@@ -16,15 +15,13 @@ export class GeminiDriver extends IDriver {
         this.activeSessions = new Map();
         this.killedSessions = new Set();
 
+        // Maps Bark sessionIds to Gemini's native session IDs for resume
+        this.sessionIdMap = new Map();
+
         this.streamCb = null;
         this.progressCb = null;
         this.errorCb = null;
         this.completeCb = null;
-    }
-
-    _getUuid(sessionId) {
-        const hash = crypto.createHash('sha256').update(sessionId).digest('hex');
-        return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
     }
 
     async spawn(config = {}) {
@@ -32,15 +29,22 @@ export class GeminiDriver extends IDriver {
     }
 
     async sendCommand(sessionId, prompt, systemPrompt = null) {
+        if (this.activeSessions.has(sessionId)) {
+            if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
+            return;
+        }
         const fullPrompt = systemPrompt
             ? `[SYSTEM CONTEXT: ${systemPrompt}]\n\nUser Request: ${prompt}`
             : prompt;
 
-        const args = [
-            '--prompt', fullPrompt,
-            '--approval-mode', 'auto_edit',
-            '--output-format', 'stream-json',
-        ];
+        const args = ['--approval-mode', 'auto_edit', '--output-format', 'stream-json'];
+
+        const nativeSessionId = this.sessionIdMap.get(sessionId);
+        if (nativeSessionId) {
+            args.push('--resume', nativeSessionId);
+        }
+
+        args.push('--prompt', fullPrompt);
 
         return new Promise((resolve, reject) => {
             console.log(`[GeminiDriver] Executing gemini for session ${sessionId}...`);
@@ -73,6 +77,12 @@ export class GeminiDriver extends IDriver {
                     if (!event) continue;
 
                     switch (event.type) {
+                        case 'init':
+                            if (event.sessionId) {
+                                this.sessionIdMap.set(sessionId, event.sessionId);
+                            }
+                            break;
+
                         case 'text':
                             // Gemini sends full accumulated text (delta: false), emit only the new part
                             if (event.delta === false) {
@@ -125,6 +135,7 @@ export class GeminiDriver extends IDriver {
                 // Suppress callbacks if this session was force-killed
                 if (this.killedSessions.has(sessionId)) {
                     this.killedSessions.delete(sessionId);
+                    reject(new Error('Session killed'));
                     return;
                 }
 
