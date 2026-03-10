@@ -94,25 +94,30 @@ export class ListAgentsCommand extends ICommand {
     }
 
     async execute({ sessionId, registry, eventBus }) {
-        const agentRegistry = registry.getAgentRegistry();
-        if (!agentRegistry) return;
+        try {
+            const agentRegistry = registry.getAgentRegistry();
+            if (!agentRegistry) return;
 
-        const agents = await agentRegistry.listAgents();
-        if (agents.length === 0) {
-            const msg = '🐾 No agents registered yet. Use `/new <name>` to spawn one!';
+            const agents = await agentRegistry.listAgents();
+            if (agents.length === 0) {
+                const msg = '🐾 No agents registered yet. Use `/new <name>` to spawn one!';
+                eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
+                eventBus.publish({ type: 'command.complete', sessionId, result: msg });
+                return;
+            }
+
+            let msg = '🤖 *Active Agents:*\n';
+            agents.forEach(a => {
+                const modelLabel = a.model ? ` [${a.model}]` : '';
+                msg += `- *${a.name}* (*${a.driver}*${modelLabel})${a.systemPrompt ? ' | ' + a.systemPrompt.substring(0, 30) + '...' : ''}\n`;
+            });
+
             eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
             eventBus.publish({ type: 'command.complete', sessionId, result: msg });
-            return;
+        } catch (err) {
+            console.error('[ListAgentsCommand] Error:', err);
+            eventBus.publish({ type: 'command.complete', sessionId, result: '❌ Error listing agents: ' + err.message });
         }
-
-        let msg = '🤖 *Active Agents:*\n';
-        agents.forEach(a => {
-            const driverLabel = a.model ? `${a.driver}/${a.model}` : a.driver;
-            msg += `- *${a.name}* (${driverLabel})${a.systemPrompt ? ': ' + a.systemPrompt.substring(0, 50) + '...' : ''}\n`;
-        });
-
-        eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
-        eventBus.publish({ type: 'command.complete', sessionId, result: msg });
     }
 }
 
