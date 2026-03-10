@@ -120,9 +120,10 @@ export class IDriver {
      * @param {string} sessionId
      * @param {string} cmd
      * @param {string} [systemPrompt] - Optional system instructions for this command/session
+     * @param {string} [model] - Optional model override for this specific command
      * @returns {Promise<void>}
      */
-    async sendCommand(sessionId, cmd, systemPrompt) { throw new NotImplementedError('sendCommand'); }
+    async sendCommand(sessionId, cmd, systemPrompt, model) { throw new NotImplementedError('sendCommand'); }
 
     /**
      * Kill the runtime process for the given session.
@@ -156,6 +157,13 @@ export class IDriver {
      * @param {function({sessionId: string, result: any}):void} cb
      */
     onComplete(cb) { throw new NotImplementedError('onComplete'); }
+
+    /**
+     * Return the list of models this driver supports.
+     * Optional — drivers that don't override this return an empty array.
+     * @returns {string[]}
+     */
+    getModels() { return []; }
 }
 
 /**

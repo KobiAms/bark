@@ -32,7 +32,11 @@ export class ClaudeCodeDriver extends IDriver {
         }
     }
 
-    async sendCommand(sessionId, cmd, systemPrompt) {
+    getModels() {
+        return ['haiku', 'sonnet', 'opus'];
+    }
+
+    async sendCommand(sessionId, cmd, systemPrompt, model) {
         if (this.activeProcesses.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
@@ -40,11 +44,11 @@ export class ClaudeCodeDriver extends IDriver {
 
         const validUuid = this._getUuid(sessionId);
         try {
-            await this._execClaude(sessionId, validUuid, cmd, true, systemPrompt);
+            await this._execClaude(sessionId, validUuid, cmd, true, systemPrompt, model);
         } catch (error) {
             if (error.message.includes('No conversation found')) {
                 console.log(`[ClaudeCodeDriver] Session not found. Initializing new session ${sessionId}...`);
-                await this._execClaude(sessionId, validUuid, cmd, false, systemPrompt);
+                await this._execClaude(sessionId, validUuid, cmd, false, systemPrompt, model);
             } else {
                 throw error;
             }
@@ -56,11 +60,11 @@ export class ClaudeCodeDriver extends IDriver {
         return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
     }
 
-    async _execClaude(sessionId, uuid, cmd, isResume, sessionSystemPrompt) {
+    async _execClaude(sessionId, uuid, cmd, isResume, sessionSystemPrompt, model) {
         const args = [
             '--dangerously-skip-permissions',
             isResume ? '--resume' : '--session-id', uuid,
-            '--model', this.model,
+            '--model', model || this.model,
             '--output-format', 'stream-json',
             '--verbose'
         ];

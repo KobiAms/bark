@@ -1,5 +1,5 @@
 import { IDriver } from '@bark/core';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { parseLine, buildProgressText } from './parser.js';
 
 export class OpenCodeDriver extends IDriver {
@@ -10,6 +10,7 @@ export class OpenCodeDriver extends IDriver {
     constructor(config = {}) {
         super();
         this.cwd = config.cwd || process.cwd();
+        this.model = config.model || 'anthropic/claude-sonnet-4-6';
         this.activeSessions = new Map();  // barkSessionId -> ChildProcess
         this.killedSessions = new Set();
 
@@ -20,13 +21,25 @@ export class OpenCodeDriver extends IDriver {
         this.progressCb = null;
         this.errorCb = null;
         this.completeCb = null;
+
+        this._models = null; // populated lazily at spawn time
+    }
+
+    getModels() {
+        return this._models ?? [];
     }
 
     async spawn(config = {}) {
+        try {
+            const output = execSync('opencode models', { encoding: 'utf8' });
+            this._models = output.split('\n').map(l => l.trim()).filter(Boolean);
+        } catch {
+            this._models = [];
+        }
         console.log('[OpenCodeDriver] Ready to spawn sessions on demand.');
     }
 
-    async sendCommand(sessionId, prompt, systemPrompt = null) {
+    async sendCommand(sessionId, prompt, systemPrompt = null, model) {
         if (this.activeSessions.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
@@ -37,7 +50,11 @@ export class OpenCodeDriver extends IDriver {
 
         // Build args: use --session with OpenCode's native ses_* ID if we've
         // seen this session before (for resume), otherwise start fresh.
+        const activeModel = model || this.model;
         const args = ['run', '--format', 'json', '--thinking'];
+        if (activeModel) {
+            args.push('--model', activeModel);
+        }
 
         const nativeSessionId = this.sessionIdMap.get(sessionId);
         if (nativeSessionId) {

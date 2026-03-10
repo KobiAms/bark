@@ -46,9 +46,16 @@ export class HelpCommand extends ICommand {
         lines.push('_(reply to an agent message)_ — Continue conversation');
         lines.push('');
 
-        // Dynamic driver info
-        const drivers = Array.from(registry.drivers.keys()).join(', ');
-        lines.push(`Available drivers: ${drivers}`);
+        // Dynamic driver info with model lists
+        lines.push('*Available drivers:*');
+        for (const [driverName, driver] of registry.drivers.entries()) {
+            const models = typeof driver.getModels === 'function' ? driver.getModels() : [];
+            if (models.length > 0) {
+                lines.push(`  \`${driverName}\`: ${models.join(', ')}`);
+            } else {
+                lines.push(`  \`${driverName}\`: (no models)`);
+            }
+        }
         lines.push(`Active driver: *${activeDriver}*`);
 
         eventBus.publish({ type: 'command.complete', sessionId, result: lines.join('\n') });

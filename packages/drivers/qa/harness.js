@@ -37,7 +37,7 @@ const CAPABILITIES = [
         id: 'CAP-01',
         name: 'Interface completeness',
         required: true,
-        description: 'Driver exposes all IDriver methods: spawn, stop, sendCommand, kill, onStream, onProgress, onError, onComplete',
+        description: 'Driver exposes all IDriver methods: spawn, stop, sendCommand, kill, onStream, onProgress, onError, onComplete, getModels',
     },
     {
         id: 'CAP-02',
@@ -127,6 +127,14 @@ const CAPABILITIES = [
         required: true,
         description: 'Sending to a session that is already running triggers onError or throws',
     },
+
+    // ── Model selection ───────────────────────────────────────────────────────
+    {
+        id: 'CAP-15',
+        name: 'Model selection',
+        required: false,
+        description: 'getModels() returns non-empty array; sendCommand() with first model completes',
+    },
 ];
 
 // ─── Drivers ─────────────────────────────────────────────────────────────────
@@ -205,10 +213,10 @@ async function runSuite(driverName) {
     // ── CAP-01: Interface completeness ────────────────────────────────────
     {
         const driver = config.create();
-        const required = ['spawn', 'stop', 'sendCommand', 'kill', 'onStream', 'onProgress', 'onError', 'onComplete'];
+        const required = ['spawn', 'stop', 'sendCommand', 'kill', 'onStream', 'onProgress', 'onError', 'onComplete', 'getModels'];
         const missing = required.filter(m => typeof driver[m] !== 'function');
         if (missing.length === 0) {
-            record(cap('CAP-01'), true, 'all 8 methods present');
+            record(cap('CAP-01'), true, 'all 9 methods present');
         } else {
             record(cap('CAP-01'), false, `missing: ${missing.join(', ')}`);
             console.log(`\n${RED}${BOLD}Aborted${RESET}: driver is missing interface methods. Implement them first.\n`);
@@ -522,6 +530,36 @@ async function runSuite(driverName) {
             record(cap('CAP-14'), false, err.message);
         } finally {
             await errDriver.stop().catch(() => {});
+        }
+    }
+
+    // ── CAP-15: Model selection (optional) ────────────────────────────────
+    {
+        const modelDriver = config.create();
+        const modelEvents = wireDriver(modelDriver);
+        await modelDriver.spawn({});
+
+        try {
+            const models = modelDriver.getModels();
+            if (!Array.isArray(models) || models.length === 0) {
+                record(cap('CAP-15'), false, 'getModels() returned empty array');
+            } else {
+                const sid = `qa-model-${Date.now()}`;
+                await Promise.race([
+                    modelDriver.sendCommand(sid, 'Reply: BARK_MODEL_OK', null, models[0]),
+                    timeout(TIMEOUT_MS, 'model selection'),
+                ]);
+                const result = modelEvents.completes[0]?.result ?? '';
+                const passed = result.length > 0;
+                record(cap('CAP-15'), passed,
+                    passed
+                        ? `model=${models[0]}, result: "${result.slice(0, 60)}"`
+                        : `model=${models[0]}, onComplete never fired`);
+            }
+        } catch (err) {
+            record(cap('CAP-15'), false, err.message);
+        } finally {
+            await modelDriver.stop().catch(() => {});
         }
     }
 

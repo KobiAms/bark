@@ -246,6 +246,7 @@ export class MessageRouter {
             let targetAgentName = null;
             let targetDriverName = this.defaultDriverName;
             let targetSystemPrompt = null;
+            let targetModel = null;
 
             const agentRegistry = this.registry.getAgentRegistry();
             const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
@@ -259,6 +260,7 @@ export class MessageRouter {
                         targetAgentName = agentName;
                         targetDriverName = agent.driver;
                         targetSystemPrompt = agent.systemPrompt;
+                        targetModel = agent.model || null;
                         targetPayload = trimmedPayload;
                     }
                 }
@@ -271,6 +273,7 @@ export class MessageRouter {
                     targetAgentName = event.quotedMessageMetadata.senderName;
                     targetDriverName = agent.driver;
                     targetSystemPrompt = agent.systemPrompt;
+                    targetModel = agent.model || null;
                     targetPayload = trimmedPayload;
                 }
             }
@@ -286,6 +289,7 @@ export class MessageRouter {
                         targetAgentName = rawName;
                         targetDriverName = agent.driver;
                         targetSystemPrompt = agent.systemPrompt;
+                        targetModel = agent.model || null;
 
                         const nameIndex = payload.indexOf('@' + rawName);
                         targetPayload = payload.substring(nameIndex + rawName.length + 1).trim();
@@ -361,7 +365,7 @@ export class MessageRouter {
                     )), DRIVER_TIMEOUT_MS)
                 );
                 await Promise.race([
-                    driver.sendCommand(effectiveSessionId, targetPayload, targetSystemPrompt),
+                    driver.sendCommand(effectiveSessionId, targetPayload, targetSystemPrompt, targetModel),
                     timeoutPromise
                 ]);
             } catch (driverError) {

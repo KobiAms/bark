@@ -12,6 +12,7 @@ export class GeminiDriver extends IDriver {
         super();
         this.cwd = config.cwd || process.cwd();
         this.yolo = config.yolo !== undefined ? config.yolo : true;
+        this.model = config.model || 'gemini-2.5-pro';
         this.activeSessions = new Map();
         this.killedSessions = new Set();
 
@@ -24,11 +25,15 @@ export class GeminiDriver extends IDriver {
         this.completeCb = null;
     }
 
+    getModels() {
+        return ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview'];
+    }
+
     async spawn(config = {}) {
         console.log('[GeminiDriver] Ready to spawn sessions on demand.');
     }
 
-    async sendCommand(sessionId, prompt, systemPrompt = null) {
+    async sendCommand(sessionId, prompt, systemPrompt = null, model) {
         if (this.activeSessions.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
@@ -37,7 +42,12 @@ export class GeminiDriver extends IDriver {
             ? `[SYSTEM CONTEXT: ${systemPrompt}]\n\nUser Request: ${prompt}`
             : prompt;
 
-        const args = ['--approval-mode', 'auto_edit', '--output-format', 'stream-json'];
+        const activeModel = model || this.model;
+        const args = ['--approval-mode', 'auto_edit'];
+        if (activeModel) {
+            args.push('-m', activeModel);
+        }
+        args.push('--output-format', 'stream-json');
 
         const nativeSessionId = this.sessionIdMap.get(sessionId);
         if (nativeSessionId) {
