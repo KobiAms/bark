@@ -26,6 +26,9 @@ export function parseLine(line) {
         if (data.type === 'init') {
             return { type: 'init', sessionId: data.session_id, model: data.model };
         }
+        if (data.type === 'thinking') {
+            return { type: 'thinking', text: data.content || '' };
+        }
         if (data.type === 'message' && data.role === 'assistant') {
             return { type: 'text', text: data.content || '', delta: data.delta || false };
         }
@@ -48,15 +51,17 @@ export function parseLine(line) {
 
 export function buildProgressText(progressText, tools) {
     const lines = [];
-    const PREVIEW_LEN = 200;
+    const PREVIEW_LEN = 300;
 
     if (progressText) {
-        let preview = progressText.slice(-PREVIEW_LEN).trim();
-        const firstSpace = preview.indexOf(' ');
-        if (firstSpace > 0 && preview.length >= PREVIEW_LEN) {
-            preview = preview.substring(firstSpace + 1);
+        const isTruncated = progressText.length > PREVIEW_LEN;
+        let preview = progressText.slice(-PREVIEW_LEN).trim().replace(/\n/g, ' ');
+        if (isTruncated) {
+            const firstSpace = preview.indexOf(' ');
+            if (firstSpace > 0) preview = preview.substring(firstSpace + 1);
+            preview = '…' + preview;
         }
-        lines.push(`_${preview.replace(/\n/g, ' ')}_`);
+        lines.push(`_${preview}_`);
     }
 
     if (tools.length > 0) {

@@ -1,6 +1,5 @@
 import { IDriver } from '@bark/core';
 import { spawn } from 'child_process';
-import crypto from 'crypto';
 import { parseLine, buildProgressText } from './parser.js';
 
 export class OpenCodeDriver extends IDriver {
@@ -11,7 +10,11 @@ export class OpenCodeDriver extends IDriver {
     constructor(config = {}) {
         super();
         this.cwd = config.cwd || process.cwd();
-        this.activeSessions = new Map();
+        this.activeSessions = new Map();  // barkSessionId -> ChildProcess
+        this.killedSessions = new Set();
+
+        // Maps Bark sessionIds to OpenCode's native `ses_*` IDs for session resume
+        this.sessionIdMap = new Map();
 
         this.streamCb = null;
         this.progressCb = null;
@@ -19,26 +22,29 @@ export class OpenCodeDriver extends IDriver {
         this.completeCb = null;
     }
 
-    _getUuid(sessionId) {
-        const hash = crypto.createHash('sha256').update(sessionId).digest('hex');
-        return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
-    }
-
     async spawn(config = {}) {
         console.log('[OpenCodeDriver] Ready to spawn sessions on demand.');
     }
 
     async sendCommand(sessionId, prompt, systemPrompt = null) {
-        const uuid = this._getUuid(sessionId);
-
         const fullPrompt = systemPrompt
             ? `[SYSTEM CONTEXT: ${systemPrompt}]\n\nUser Request: ${prompt}`
             : prompt;
 
-        const args = ['run', '--session', uuid, '--format', 'json', '--prompt', fullPrompt];
+        // Build args: use --session with OpenCode's native ses_* ID if we've
+        // seen this session before (for resume), otherwise start fresh.
+        const args = ['run', '--format', 'json', '--thinking'];
+
+        const nativeSessionId = this.sessionIdMap.get(sessionId);
+        if (nativeSessionId) {
+            args.push('--session', nativeSessionId);
+        }
+
+        // Message is a positional argument (after all flags)
+        args.push(fullPrompt);
 
         return new Promise((resolve, reject) => {
-            console.log(`[OpenCodeDriver] Executing opencode for session ${uuid}...`);
+            console.log(`[OpenCodeDriver] Executing opencode for session ${sessionId}${nativeSessionId ? ` (resume: ${nativeSessionId})` : ''}...`);
 
             const child = spawn('opencode', args, {
                 cwd: this.cwd,
@@ -52,8 +58,10 @@ export class OpenCodeDriver extends IDriver {
             let errorBuffer = '';
             let finalResult = '';
 
-            // Progress state
+            // Progress state (thinking + text, for live updates)
             let progressText = '';
+            // Text-only accumulator (for final result)
+            let textContent = '';
             const tools = [];
 
             child.stdout.on('data', (data) => {
@@ -66,8 +74,16 @@ export class OpenCodeDriver extends IDriver {
                     if (!event) continue;
 
                     switch (event.type) {
+                        case 'init':
+                            // Capture OpenCode's native session ID for future resume
+                            if (event.sessionId) {
+                                this.sessionIdMap.set(sessionId, event.sessionId);
+                            }
+                            break;
+
                         case 'text':
                             if (this.streamCb) this.streamCb({ sessionId, chunk: event.text });
+                            textContent += event.text;
                             progressText += event.text;
                             if (this.progressCb) {
                                 this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
@@ -89,7 +105,10 @@ export class OpenCodeDriver extends IDriver {
                             break;
 
                         case 'result':
-                            if (event.text) finalResult = event.text;
+                            // step_finish events often have no text — the actual
+                            // response was already streamed via text events.
+                            // Use textContent (not progressText) to exclude thinking.
+                            finalResult = event.text || textContent;
                             break;
                     }
                 }
@@ -101,6 +120,11 @@ export class OpenCodeDriver extends IDriver {
 
             child.on('close', (code) => {
                 this.activeSessions.delete(sessionId);
+
+                if (this.killedSessions.has(sessionId)) {
+                    this.killedSessions.delete(sessionId);
+                    return;
+                }
 
                 if (code !== 0 && code !== null) {
                     console.error(`[OpenCodeDriver] Process exited with code ${code}: ${errorBuffer}`);
@@ -125,6 +149,7 @@ export class OpenCodeDriver extends IDriver {
     async kill(sessionId) {
         const child = this.activeSessions.get(sessionId);
         if (child) {
+            this.killedSessions.add(sessionId);
             child.kill('SIGKILL');
             this.activeSessions.delete(sessionId);
         }

@@ -20,6 +20,7 @@ export class ClaudeCodeDriver extends IDriver {
         this.completeCb = null;
 
         this.activeProcesses = new Map(); // sessionId -> ChildProcess
+        this.killedSessions = new Set();
     }
 
     async spawn(config) {
@@ -141,6 +142,12 @@ export class ClaudeCodeDriver extends IDriver {
             child.on('close', (code) => {
                 this.activeProcesses.delete(sessionId);
 
+                // Suppress callbacks if this session was force-killed
+                if (this.killedSessions.has(sessionId)) {
+                    this.killedSessions.delete(sessionId);
+                    return;
+                }
+
                 // Flush remaining buffer
                 if (buffer.trim()) {
                     const event = parseLine(buffer.trim());
@@ -173,6 +180,7 @@ export class ClaudeCodeDriver extends IDriver {
         const child = this.activeProcesses.get(sessionId);
         if (child) {
             console.log(`[ClaudeCodeDriver] Killing session ${sessionId}`);
+            this.killedSessions.add(sessionId);
             child.kill('SIGKILL');
             this.activeProcesses.delete(sessionId);
         }

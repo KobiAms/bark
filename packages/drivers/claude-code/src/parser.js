@@ -67,15 +67,18 @@ export function parseLine(line) {
  */
 export function buildProgressText(progressText, tools) {
     const lines = [];
-    const PREVIEW_LEN = 200;
+    const PREVIEW_LEN = 300;
 
     if (progressText) {
-        let preview = progressText.slice(-PREVIEW_LEN).trim();
-        const firstSpace = preview.indexOf(' ');
-        if (firstSpace > 0 && preview.length >= PREVIEW_LEN) {
-            preview = preview.substring(firstSpace + 1);
+        const isTruncated = progressText.length > PREVIEW_LEN;
+        let preview = progressText.slice(-PREVIEW_LEN).trim().replace(/\n/g, ' ');
+        if (isTruncated) {
+            // Cut at first word boundary to avoid mid-word chop
+            const firstSpace = preview.indexOf(' ');
+            if (firstSpace > 0) preview = preview.substring(firstSpace + 1);
+            preview = '…' + preview;
         }
-        lines.push(`_${preview.replace(/\n/g, ' ')}_`);
+        lines.push(`_${preview}_`);
     }
 
     if (tools.length > 0) {

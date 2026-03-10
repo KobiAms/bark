@@ -14,6 +14,7 @@ export class GeminiDriver extends IDriver {
         this.cwd = config.cwd || process.cwd();
         this.yolo = config.yolo !== undefined ? config.yolo : true;
         this.activeSessions = new Map();
+        this.killedSessions = new Set();
 
         this.streamCb = null;
         this.progressCb = null;
@@ -56,8 +57,10 @@ export class GeminiDriver extends IDriver {
             let errorBuffer = '';
             let finalResult = '';
 
-            // Progress state
+            // Progress state (thinking + text, for live updates)
             let progressText = '';
+            // Text-only accumulator (for final result)
+            let textContent = '';
             const tools = [];
 
             child.stdout.on('data', (data) => {
@@ -75,9 +78,11 @@ export class GeminiDriver extends IDriver {
                             if (event.delta === false) {
                                 const newPart = event.text.slice(progressText.length);
                                 if (newPart && this.streamCb) this.streamCb({ sessionId, chunk: newPart });
+                                textContent = event.text;
                                 progressText = event.text;
                             } else {
                                 if (this.streamCb) this.streamCb({ sessionId, chunk: event.text });
+                                textContent += event.text;
                                 progressText += event.text;
                             }
                             if (this.progressCb) {
@@ -101,7 +106,10 @@ export class GeminiDriver extends IDriver {
                             break;
 
                         case 'result':
-                            finalResult = event.text;
+                            // Gemini's result event often has no content — the text
+                            // was already streamed via message events. Fall back to
+                            // textContent (not progressText) to exclude thinking.
+                            finalResult = event.text || textContent;
                             break;
                     }
                 }
@@ -113,6 +121,12 @@ export class GeminiDriver extends IDriver {
 
             child.on('close', (code) => {
                 this.activeSessions.delete(sessionId);
+
+                // Suppress callbacks if this session was force-killed
+                if (this.killedSessions.has(sessionId)) {
+                    this.killedSessions.delete(sessionId);
+                    return;
+                }
 
                 if (code !== 0 && code !== null) {
                     console.error(`[GeminiDriver] Process exited with code ${code}: ${errorBuffer}`);
@@ -137,6 +151,7 @@ export class GeminiDriver extends IDriver {
     async kill(sessionId) {
         const child = this.activeSessions.get(sessionId);
         if (child) {
+            this.killedSessions.add(sessionId);
             child.kill('SIGKILL');
             this.activeSessions.delete(sessionId);
         }

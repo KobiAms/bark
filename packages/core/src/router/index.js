@@ -1,4 +1,4 @@
-const DRIVER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const DRIVER_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 export class MessageRouter {
     /**
@@ -16,8 +16,14 @@ export class MessageRouter {
         // Maps sessionId -> messageId of the live placeholder message (for editing)
         this.liveMessageIds = new Map();
 
-        // Maps sessionId -> timestamp of last editMessage call (for throttling)
-        this.lastEditTime = new Map();
+        // Maps sessionId -> latest buffered progressText (updated on every event)
+        this.pendingProgress = new Map();
+
+        // Maps sessionId -> setInterval timer id for flushing progress to adapter
+        this.progressTimers = new Map();
+
+        // Maps sessionId -> flush count (for animated dots)
+        this.flushCount = new Map();
 
         this._unsubs = [];
     }
@@ -96,7 +102,7 @@ export class MessageRouter {
 
         const messageId = this.liveMessageIds.get(effectiveSessionId);
         this.liveMessageIds.delete(effectiveSessionId);
-        this.lastEditTime.delete(effectiveSessionId);
+        this._clearProgressTimer(effectiveSessionId);
 
         if (messageId) {
             await r.adapter.editMessage(r.replyTo, messageId, text).catch(async () => {
@@ -137,13 +143,51 @@ export class MessageRouter {
         const messageId = this.liveMessageIds.get(event.sessionId);
         if (!messageId) return;
 
-        const throttleMs = r.adapter.editThrottleMs ?? 1000;
-        const lastEdit = this.lastEditTime.get(event.sessionId) || 0;
-        if (Date.now() - lastEdit < throttleMs) return;
+        // Always buffer the latest progress text — the timer will flush it
+        this.pendingProgress.set(event.sessionId, event.progressText);
 
-        this.lastEditTime.set(event.sessionId, Date.now());
-        const prefix = this._getAgentPrefix(event.sessionId);
-        r.adapter.editMessage(r.replyTo, messageId, prefix + event.progressText).catch(() => {});
+        // Start flush timer on first event for this session
+        if (!this.progressTimers.has(event.sessionId)) {
+            const intervalMs = r.adapter.editThrottleMs ?? 2000;
+            // Fire immediately for the very first update
+            this._flushProgress(event.sessionId);
+            const timer = setInterval(() => this._flushProgress(event.sessionId), intervalMs);
+            this.progressTimers.set(event.sessionId, timer);
+        }
+    }
+
+    _flushProgress(sessionId) {
+        const progressText = this.pendingProgress.get(sessionId);
+        if (!progressText) return;
+
+        const r = this._getAdapterAndReplyTo(sessionId);
+        if (!r?.adapter) return;
+
+        const messageId = this.liveMessageIds.get(sessionId);
+        if (!messageId) {
+            this._clearProgressTimer(sessionId);
+            return;
+        }
+
+        // Animated dots: cycles through . .. ...
+        const count = (this.flushCount.get(sessionId) || 0) + 1;
+        this.flushCount.set(sessionId, count);
+        const dots = '.'.repeat((count % 3) + 1);
+
+        const prefix = this._getAgentPrefix(sessionId);
+        const label = prefix ? prefix.trimEnd() + ` _on it${dots}_` : `_on it${dots}_`;
+        const body = progressText !== '_thinking..._' ? '\n\n' + progressText : '';
+        r.adapter.editMessage(r.replyTo, messageId, label + body).catch(() => {});
+    }
+
+    _clearProgressTimer(sessionId) {
+        const timer = this.progressTimers.get(sessionId);
+        if (timer) {
+            clearInterval(timer);
+            this.progressTimers.delete(sessionId);
+        }
+        this.pendingProgress.delete(sessionId);
+        this.flushCount.delete(sessionId);
     }
 
     async _onDriverComplete(event) {
@@ -292,7 +336,10 @@ export class MessageRouter {
                 const replyTo = routing.replyTo || effectiveSessionId;
                 if (adapter) {
                     const prefix = this._getAgentPrefix(effectiveSessionId);
-                    const sent = await adapter.sendMessage(replyTo, prefix + '_thinking..._', { replyToMessageId: routing.lastMessageId }).catch(() => null);
+                    const thinkingLabel = prefix
+                        ? prefix.trimEnd() + ' _on it._'
+                        : '_on it._';
+                    const sent = await adapter.sendMessage(replyTo, thinkingLabel, { replyToMessageId: routing.lastMessageId }).catch(() => null);
                     if (sent?.messageId) {
                         this.liveMessageIds.set(effectiveSessionId, sent.messageId);
                         // Persist thinking message → agent mapping too (for immediate reply-to)

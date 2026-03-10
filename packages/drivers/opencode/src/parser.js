@@ -25,8 +25,8 @@ export function parseLine(line) {
     try {
         const data = JSON.parse(line);
 
-        if (data.type === 'session.created' || data.type === 'session.updated') {
-            const id = data.sessionID || data.id;
+        if (data.type === 'session.created' || data.type === 'session.updated' || data.type === 'step_start') {
+            const id = data.sessionID || data.part?.sessionID || data.id;
             return id ? { type: 'init', sessionId: id } : null;
         }
 
@@ -77,15 +77,17 @@ export function parseLine(line) {
 
 export function buildProgressText(progressText, tools) {
     const lines = [];
-    const PREVIEW_LEN = 200;
+    const PREVIEW_LEN = 300;
 
     if (progressText) {
-        let preview = progressText.slice(-PREVIEW_LEN).trim();
-        const firstSpace = preview.indexOf(' ');
-        if (firstSpace > 0 && preview.length >= PREVIEW_LEN) {
-            preview = preview.substring(firstSpace + 1);
+        const isTruncated = progressText.length > PREVIEW_LEN;
+        let preview = progressText.slice(-PREVIEW_LEN).trim().replace(/\n/g, ' ');
+        if (isTruncated) {
+            const firstSpace = preview.indexOf(' ');
+            if (firstSpace > 0) preview = preview.substring(firstSpace + 1);
+            preview = '…' + preview;
         }
-        lines.push(`_${preview.replace(/\n/g, ' ')}_`);
+        lines.push(`_${preview}_`);
     }
 
     if (tools.length > 0) {
