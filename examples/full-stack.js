@@ -44,8 +44,11 @@ async function main() {
     bark.useCommand(new ListAgentsCommand());
     bark.useCommand(new RestartCommand());
 
-    // Graceful shutdown
+    // Graceful shutdown — guard against double-firing (SIGINT + SIGTERM both arrive on Ctrl+C)
+    let stopping = false;
     const shutdown = async () => {
+        if (stopping) return;
+        stopping = true;
         console.log('\nShutting down Bark...');
         await bark.stop();
         process.exit(0);

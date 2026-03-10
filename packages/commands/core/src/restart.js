@@ -29,6 +29,15 @@ export class RestartCommand extends ICommand {
             }
         }
 
-        setTimeout(() => process.exit(0), 1500);
+        setTimeout(async () => {
+            console.log('[RestartCommand] Stopping all drivers and adapters before restart...');
+            const drivers = registry.getAllDrivers();
+            const adapters = registry.getAllAdapters();
+            await Promise.all([
+                ...drivers.map(d => d.stop().catch(() => {})),
+                ...adapters.map(a => a.stop().catch(() => {})),
+            ]);
+            process.exit(0);
+        }, 1500);
     }
 }
