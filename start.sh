@@ -11,6 +11,7 @@ cleanup() {
     if [ -n "$CHILD_PID" ]; then
         kill "$CHILD_PID" 2>/dev/null
         wait "$CHILD_PID" 2>/dev/null
+        sleep 0.1  # let stdout pipe drain before shell reclaims the terminal
     fi
     exit 0
 }
