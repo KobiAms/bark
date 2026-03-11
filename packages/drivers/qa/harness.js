@@ -22,6 +22,7 @@ import { execSync } from 'child_process';
 import { ClaudeCodeDriver } from '@bark/driver-claude-code';
 import { GeminiDriver } from '@bark/driver-gemini';
 import { OpenCodeDriver } from '@bark/driver-opencode';
+import { CursorDriver } from '@bark/driver-cursor';
 
 // ─── Capability definitions ──────────────────────────────────────────────────
 //
@@ -143,6 +144,7 @@ const DRIVER_MAP = {
     'claude-code': { create: () => new ClaudeCodeDriver(), cli: 'claude' },
     'gemini':      { create: () => new GeminiDriver({ cwd: process.cwd() }), cli: 'gemini' },
     'opencode':    { create: () => new OpenCodeDriver({ cwd: process.cwd() }), cli: 'opencode' },
+    'cursor':      { create: () => new CursorDriver({ workspace: process.cwd() }), cli: 'agent' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

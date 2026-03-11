@@ -25,6 +25,15 @@ export class MessageRouter {
         // Maps sessionId -> flush count (for animated dots)
         this.flushCount = new Map();
 
+        // Maps sessionId -> Date.now() when thinking started (for elapsed time display)
+        this.thinkingStartTime = new Map();
+
+        // Maps sessionId -> Promise of the last in-flight progress edit (to await before final edit)
+        this.inFlightEdits = new Map();
+
+        // Sessions that have been finalized (timed out or errored) — suppresses late driver.complete
+        this.finishedSessions = new Set();
+
         this._unsubs = [];
     }
 
@@ -104,6 +113,14 @@ export class MessageRouter {
         this.liveMessageIds.delete(effectiveSessionId);
         this._clearProgressTimer(effectiveSessionId);
 
+        // Wait for any in-flight progress edit to settle before sending the final edit,
+        // otherwise the progress edit can land AFTER the final one and overwrite it.
+        const inFlight = this.inFlightEdits.get(effectiveSessionId);
+        if (inFlight) {
+            await inFlight;
+            this.inFlightEdits.delete(effectiveSessionId);
+        }
+
         if (messageId) {
             await r.adapter.editMessage(r.replyTo, messageId, text).catch(async () => {
                 await r.adapter.sendMessage(r.replyTo, text, { replyToMessageId: r.lastMessageId }).catch(() => {});
@@ -128,6 +145,7 @@ export class MessageRouter {
 
     _onStreamChunk(event) {
         if (event.chunk == null) return;
+        if (this.finishedSessions.has(event.sessionId)) return;
         const r = this._getAdapterAndReplyTo(event.sessionId);
         if (!r?.adapter) return;
         r.adapter.sendChunk(r.replyTo, event.chunk).catch(err =>
@@ -137,6 +155,7 @@ export class MessageRouter {
 
     _onStreamProgress(event) {
         if (!event.progressText) return;
+        if (this.finishedSessions.has(event.sessionId)) return;
         const r = this._getAdapterAndReplyTo(event.sessionId);
         if (!r?.adapter) return;
 
@@ -174,10 +193,15 @@ export class MessageRouter {
         this.flushCount.set(sessionId, count);
         const dots = '.'.repeat((count % 3) + 1);
 
+        // Elapsed time since thinking started
+        const startTime = this.thinkingStartTime.get(sessionId);
+        const elapsed = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
+        const elapsedLabel = elapsed >= 5 ? ` (${elapsed}s)` : '';
+
         const prefix = this._getAgentPrefix(sessionId);
-        const label = prefix ? prefix.trimEnd() + ` _on it${dots}_` : `_on it${dots}_`;
-        const body = progressText !== '_thinking..._' ? '\n\n' + progressText : '';
-        r.adapter.editMessage(r.replyTo, messageId, label + body).catch(() => {});
+        const label = prefix ? prefix.trimEnd() + ` _on it${dots}_${elapsedLabel}` : `_on it${dots}_${elapsedLabel}`;
+        const editPromise = r.adapter.editMessage(r.replyTo, messageId, label + '\n\n' + progressText).catch(() => {});
+        this.inFlightEdits.set(sessionId, editPromise);
     }
 
     _clearProgressTimer(sessionId) {
@@ -188,10 +212,18 @@ export class MessageRouter {
         }
         this.pendingProgress.delete(sessionId);
         this.flushCount.delete(sessionId);
+        this.thinkingStartTime.delete(sessionId);
+        // Note: inFlightEdits is NOT deleted here — _editOrSend awaits it before final edit
     }
 
     async _onDriverComplete(event) {
         if (event.result == null) return;
+
+        // Suppress late completions for sessions already finalized (timeout/error/kill)
+        if (this.finishedSessions.has(event.sessionId)) {
+            this.finishedSessions.delete(event.sessionId);
+            return;
+        }
 
         const prefix = this._getAgentPrefix(event.sessionId);
         const result = prefix + (event.result.trim() || 'Done.');
@@ -346,6 +378,7 @@ export class MessageRouter {
                     const sent = await adapter.sendMessage(replyTo, thinkingLabel, { replyToMessageId: routing.lastMessageId }).catch(() => null);
                     if (sent?.messageId) {
                         this.liveMessageIds.set(effectiveSessionId, sent.messageId);
+                        this.thinkingStartTime.set(effectiveSessionId, Date.now());
                         // Persist thinking message → agent mapping too (for immediate reply-to)
                         if (targetAgentName) {
                             await this._setMessageAgent(sent.messageId, targetAgentName);
@@ -360,7 +393,7 @@ export class MessageRouter {
             try {
                 const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(Object.assign(
-                        new Error('⏱️ No response after 5 minutes. The session was cancelled.'),
+                        new Error('⏱️ No response after 30 minutes. The session was cancelled.'),
                         { isTimeout: true }
                     )), DRIVER_TIMEOUT_MS)
                 );
@@ -369,6 +402,17 @@ export class MessageRouter {
                     timeoutPromise
                 ]);
             } catch (driverError) {
+                // "Session killed" is expected during restart/stop — don't surface it
+                if (driverError.message === 'Session killed') {
+                    this.finishedSessions.add(effectiveSessionId);
+                    this.liveMessageIds.delete(effectiveSessionId);
+                    this._clearProgressTimer(effectiveSessionId);
+                    return;
+                }
+
+                // Mark session as finished so late driver.complete is suppressed
+                this.finishedSessions.add(effectiveSessionId);
+
                 if (driverError.isTimeout) {
                     await driver.kill(effectiveSessionId).catch(() => {});
                 } else {

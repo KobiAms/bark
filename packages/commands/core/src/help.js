@@ -10,54 +10,64 @@ export class HelpCommand extends ICommand {
     }
 
     async execute({ sessionId, registry, storage, eventBus }) {
-        // Resolve active driver for this session
-        let activeDriver = null;
-        if (storage) {
-            const session = await storage.getSession(sessionId);
-            activeDriver = session?.driverName || null;
-        }
-        if (!activeDriver) {
-            activeDriver = Array.from(registry.drivers.keys())[0] || 'none';
-        }
-
-        // Collect command metadata from all registered commands
-        const groups = new Map();
-        for (const command of registry.getAllCommands()) {
-            const info = command.describe?.();
-            if (!info) continue;
-            const group = info.group || 'Other';
-            if (!groups.has(group)) groups.set(group, []);
-            groups.get(group).push(info);
-        }
-
-        const lines = ['🐕 *Bark Commands*', ''];
-
-        for (const [group, commands] of groups) {
-            lines.push(`*${group}*`);
-            for (const cmd of commands) {
-                lines.push(`\`${cmd.usage}\` — ${cmd.description}`);
+        try {
+            // Resolve active driver for this session
+            let activeDriver = null;
+            if (storage) {
+                const session = await storage.getSession(sessionId);
+                activeDriver = session?.driverName || null;
             }
+            if (!activeDriver) {
+                activeDriver = Array.from(registry.drivers.keys())[0] || 'none';
+            }
+
+            // Collect command metadata from all registered commands
+            const groups = new Map();
+            for (const command of registry.getAllCommands()) {
+                const info = command.describe?.();
+                if (!info) continue;
+                const group = info.group || 'Other';
+                if (!groups.has(group)) groups.set(group, []);
+                groups.get(group).push(info);
+            }
+
+            const lines = ['🐕 *Bark Commands*', ''];
+
+            for (const [group, commands] of groups) {
+                lines.push(`*${group}*`);
+                for (const cmd of commands) {
+                    lines.push(`\`${cmd.usage}\` — ${cmd.description}`);
+                }
+                lines.push('');
+            }
+
+            // Messaging is core routing behavior, not a command — always shown
+            lines.push('*Messaging*');
+            lines.push('`@<name> <message>` — Talk to an agent');
+            lines.push('_(reply to an agent message)_ — Continue conversation');
             lines.push('');
-        }
 
-        // Messaging is core routing behavior, not a command — always shown
-        lines.push('*Messaging*');
-        lines.push('`@<name> <message>` — Talk to an agent');
-        lines.push('_(reply to an agent message)_ — Continue conversation');
-        lines.push('');
-
-        // Dynamic driver info with model lists
-        lines.push('*Available drivers:*');
-        for (const [driverName, driver] of registry.drivers.entries()) {
-            const models = typeof driver.getModels === 'function' ? driver.getModels() : [];
-            if (models.length > 0) {
-                lines.push(`  \`${driverName}\`: ${models.join(', ')}`);
-            } else {
-                lines.push(`  \`${driverName}\`: (no models)`);
+            // Dynamic driver info with model lists
+            lines.push('*Available drivers:*');
+            for (const [driverName, driver] of registry.drivers.entries()) {
+                try {
+                    const models = typeof driver.getModels === 'function' ? driver.getModels() : [];
+                    if (models.length > 0) {
+                        lines.push(`  \`${driverName}\`: ${models.join(', ')}`);
+                    } else {
+                        lines.push(`  \`${driverName}\`: (no models)`);
+                    }
+                } catch (err) {
+                    console.error(`[HelpCommand] Error getting models for driver ${driverName}:`, err);
+                    lines.push(`  \`${driverName}\`: (error loading models)`);
+                }
             }
-        }
-        lines.push(`Active driver: *${activeDriver}*`);
+            lines.push(`Active driver: *${activeDriver}*`);
 
-        eventBus.publish({ type: 'command.complete', sessionId, result: lines.join('\n') });
+            eventBus.publish({ type: 'command.complete', sessionId, result: lines.join('\n') });
+        } catch (err) {
+            console.error('[HelpCommand] Error:', err);
+            eventBus.publish({ type: 'command.complete', sessionId, result: '❌ Error generating help: ' + err.message });
+        }
     }
 }
