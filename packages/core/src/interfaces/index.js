@@ -121,9 +121,10 @@ export class IDriver {
      * @param {string} cmd
      * @param {string} [systemPrompt] - Optional system instructions for this command/session
      * @param {string} [model] - Optional model override for this specific command
+     * @param {Object} [driverState={}] - Driver-specific state persisted across calls (e.g. nativeSessionId)
      * @returns {Promise<void>}
      */
-    async sendCommand(sessionId, cmd, systemPrompt, model) { throw new NotImplementedError('sendCommand'); }
+    async sendCommand(sessionId, cmd, systemPrompt, model, driverState = {}) { throw new NotImplementedError('sendCommand'); }
 
     /**
      * Kill the runtime process for the given session.
@@ -154,7 +155,7 @@ export class IDriver {
 
     /**
      * Register a callback when a command execution completes.
-     * @param {function({sessionId: string, result: any}):void} cb
+     * @param {function({sessionId: string, result: any, driverState?: Object}):void} cb
      */
     onComplete(cb) { throw new NotImplementedError('onComplete'); }
 

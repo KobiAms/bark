@@ -225,6 +225,18 @@ export class MessageRouter {
             return;
         }
 
+        // Persist driver state if returned by the driver
+        if (event.driverState) {
+            const storage = this.registry.getStorage();
+            if (storage) {
+                const session = await storage.getSession(event.sessionId).catch(() => null);
+                if (session) {
+                    session.driverState = event.driverState;
+                    await storage.saveSession(event.sessionId, session).catch(() => {});
+                }
+            }
+        }
+
         const prefix = this._getAgentPrefix(event.sessionId);
         const result = prefix + (event.result.trim() || 'Done.');
 
@@ -398,7 +410,7 @@ export class MessageRouter {
                     )), DRIVER_TIMEOUT_MS)
                 );
                 await Promise.race([
-                    driver.sendCommand(effectiveSessionId, targetPayload, targetSystemPrompt, targetModel),
+                    driver.sendCommand(effectiveSessionId, targetPayload, targetSystemPrompt, targetModel, session.driverState || {}),
                     timeoutPromise
                 ]);
             } catch (driverError) {

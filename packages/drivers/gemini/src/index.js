@@ -16,9 +16,6 @@ export class GeminiDriver extends IDriver {
         this.activeSessions = new Map();
         this.killedSessions = new Set();
 
-        // Maps Bark sessionIds to Gemini's native session IDs for resume
-        this.sessionIdMap = new Map();
-
         this.streamCb = null;
         this.progressCb = null;
         this.errorCb = null;
@@ -33,7 +30,7 @@ export class GeminiDriver extends IDriver {
         console.log('[GeminiDriver] Ready to spawn sessions on demand.');
     }
 
-    async sendCommand(sessionId, prompt, systemPrompt = null, model) {
+    async sendCommand(sessionId, prompt, systemPrompt = null, model, driverState = {}) {
         if (this.activeSessions.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
@@ -49,7 +46,7 @@ export class GeminiDriver extends IDriver {
         }
         args.push('--output-format', 'stream-json');
 
-        const nativeSessionId = this.sessionIdMap.get(sessionId);
+        const nativeSessionId = driverState.nativeSessionId;
         if (nativeSessionId) {
             args.push('--resume', nativeSessionId);
         }
@@ -70,6 +67,7 @@ export class GeminiDriver extends IDriver {
             let buffer = '';
             let errorBuffer = '';
             let finalResult = '';
+            let capturedNativeSessionId = nativeSessionId; // Track the native ID from init event
 
             // Progress state (thinking + text, for live updates)
             let progressText = '';
@@ -89,7 +87,7 @@ export class GeminiDriver extends IDriver {
                     switch (event.type) {
                         case 'init':
                             if (event.sessionId) {
-                                this.sessionIdMap.set(sessionId, event.sessionId);
+                                capturedNativeSessionId = event.sessionId;
                             }
                             break;
 
@@ -156,7 +154,7 @@ export class GeminiDriver extends IDriver {
                     return;
                 }
 
-                if (this.completeCb) this.completeCb({ sessionId, result: finalResult });
+                if (this.completeCb) this.completeCb({ sessionId, result: finalResult, driverState: { nativeSessionId: capturedNativeSessionId } });
                 resolve();
             });
 

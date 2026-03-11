@@ -18,9 +18,6 @@ export class CursorDriver extends IDriver {
         this.activeSessions = new Map();  // barkSessionId -> ChildProcess
         this.killedSessions = new Set();
 
-        // Maps Bark sessionIds to Cursor's native session UUIDs for resume
-        this.sessionIdMap = new Map();
-
         this.streamCb = null;
         this.progressCb = null;
         this.errorCb = null;
@@ -53,7 +50,7 @@ export class CursorDriver extends IDriver {
         console.log('[CursorDriver] Ready to spawn sessions on demand.');
     }
 
-    async sendCommand(sessionId, prompt, systemPrompt = null, model) {
+    async sendCommand(sessionId, prompt, systemPrompt = null, model, driverState = {}) {
         if (this.activeSessions.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
@@ -81,7 +78,7 @@ export class CursorDriver extends IDriver {
         }
 
         // Resume existing session if we have one
-        const nativeSessionId = this.sessionIdMap.get(sessionId);
+        const nativeSessionId = driverState.nativeSessionId;
         if (nativeSessionId) {
             args.push('--resume', nativeSessionId);
         }
@@ -99,6 +96,7 @@ export class CursorDriver extends IDriver {
             let buffer = '';
             let errorBuffer = '';
             let finalResult = '';
+            let capturedNativeSessionId = nativeSessionId; // Track the native ID from init event
 
             // Progress state (thinking + text, for live updates)
             let progressText = '';
@@ -119,7 +117,7 @@ export class CursorDriver extends IDriver {
                         case 'init':
                             // Capture Cursor's native session ID for future resume
                             if (event.sessionId) {
-                                this.sessionIdMap.set(sessionId, event.sessionId);
+                                capturedNativeSessionId = event.sessionId;
                             }
                             break;
 
@@ -175,7 +173,7 @@ export class CursorDriver extends IDriver {
                     return;
                 }
 
-                if (this.completeCb) this.completeCb({ sessionId, result: finalResult });
+                if (this.completeCb) this.completeCb({ sessionId, result: finalResult, driverState: { nativeSessionId: capturedNativeSessionId } });
                 resolve();
             });
 

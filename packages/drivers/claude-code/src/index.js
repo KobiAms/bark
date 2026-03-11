@@ -1,5 +1,5 @@
 import { IDriver } from '@bark/core';
-import crypto from 'crypto';
+import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import { parseLine, buildProgressText } from './parser.js';
 
@@ -36,34 +36,30 @@ export class ClaudeCodeDriver extends IDriver {
         return ['haiku', 'sonnet', 'opus'];
     }
 
-    async sendCommand(sessionId, cmd, systemPrompt, model) {
+    async sendCommand(sessionId, cmd, systemPrompt, model, driverState = {}) {
         if (this.activeProcesses.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
         }
 
-        const validUuid = this._getUuid(sessionId);
+        const nativeSessionId = driverState.nativeSessionId || randomUUID();
         try {
-            await this._execClaude(sessionId, validUuid, cmd, true, systemPrompt, model);
+            await this._execClaude(sessionId, nativeSessionId, cmd, true, systemPrompt, model, nativeSessionId);
         } catch (error) {
             if (error.message.includes('No conversation found')) {
                 console.log(`[ClaudeCodeDriver] Session not found. Initializing new session ${sessionId}...`);
-                await this._execClaude(sessionId, validUuid, cmd, false, systemPrompt, model);
+                const freshUuid = randomUUID();
+                await this._execClaude(sessionId, freshUuid, cmd, false, systemPrompt, model, freshUuid);
             } else {
                 throw error;
             }
         }
     }
 
-    _getUuid(sessionId) {
-        const hash = crypto.createHash('md5').update(sessionId).digest('hex');
-        return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-    }
-
-    async _execClaude(sessionId, uuid, cmd, isResume, sessionSystemPrompt, model) {
+    async _execClaude(sessionId, nativeSessionId, cmd, isResume, sessionSystemPrompt, model, uuidUsed) {
         const args = [
             '--dangerously-skip-permissions',
-            isResume ? '--resume' : '--session-id', uuid,
+            isResume ? '--resume' : '--session-id', nativeSessionId,
             '--model', model || this.model,
             '--output-format', 'stream-json',
             '--verbose'
@@ -174,7 +170,7 @@ export class ClaudeCodeDriver extends IDriver {
                         reject(err);
                     }
                 } else {
-                    if (this.completeCb) this.completeCb({ sessionId, result: finalResult });
+                    if (this.completeCb) this.completeCb({ sessionId, result: finalResult, driverState: { nativeSessionId: uuidUsed } });
                     resolve();
                 }
             });

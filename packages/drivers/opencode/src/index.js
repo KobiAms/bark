@@ -14,9 +14,6 @@ export class OpenCodeDriver extends IDriver {
         this.activeSessions = new Map();  // barkSessionId -> ChildProcess
         this.killedSessions = new Set();
 
-        // Maps Bark sessionIds to OpenCode's native `ses_*` IDs for session resume
-        this.sessionIdMap = new Map();
-
         this.streamCb = null;
         this.progressCb = null;
         this.errorCb = null;
@@ -39,7 +36,7 @@ export class OpenCodeDriver extends IDriver {
         console.log('[OpenCodeDriver] Ready to spawn sessions on demand.');
     }
 
-    async sendCommand(sessionId, prompt, systemPrompt = null, model) {
+    async sendCommand(sessionId, prompt, systemPrompt = null, model, driverState = {}) {
         if (this.activeSessions.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
@@ -56,7 +53,7 @@ export class OpenCodeDriver extends IDriver {
             args.push('--model', activeModel);
         }
 
-        const nativeSessionId = this.sessionIdMap.get(sessionId);
+        const nativeSessionId = driverState.nativeSessionId;
         if (nativeSessionId) {
             args.push('--session', nativeSessionId);
         }
@@ -78,6 +75,7 @@ export class OpenCodeDriver extends IDriver {
             let buffer = '';
             let errorBuffer = '';
             let finalResult = '';
+            let capturedNativeSessionId = nativeSessionId; // Track the native ID from init event
 
             // Progress state (thinking + text, for live updates)
             let progressText = '';
@@ -98,7 +96,7 @@ export class OpenCodeDriver extends IDriver {
                         case 'init':
                             // Capture OpenCode's native session ID for future resume
                             if (event.sessionId) {
-                                this.sessionIdMap.set(sessionId, event.sessionId);
+                                capturedNativeSessionId = event.sessionId;
                             }
                             break;
 
@@ -155,7 +153,7 @@ export class OpenCodeDriver extends IDriver {
                     return;
                 }
 
-                if (this.completeCb) this.completeCb({ sessionId, result: finalResult });
+                if (this.completeCb) this.completeCb({ sessionId, result: finalResult, driverState: { nativeSessionId: capturedNativeSessionId } });
                 resolve();
             });
 
