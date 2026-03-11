@@ -1,0 +1,10 @@
+{
+  "name": "@bark/driver-cursor",
+  "version": "1.0.0",
+  "description": "Cursor CLI driver for Bark orchestration",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}

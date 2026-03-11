@@ -7,6 +7,7 @@
   "main": "harness.js",
   "dependencies": {
     "@bark/driver-claude-code": "*",
+    "@bark/driver-cursor": "*",
     "@bark/driver-gemini": "*",
     "@bark/driver-opencode": "*"
   }

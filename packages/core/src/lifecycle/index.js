@@ -22,6 +22,12 @@ export class LifecycleManager {
         console.log('[LifecycleManager] Starting Bark Core...');
         this.router.start();
 
+        // Initialize all drivers (spawn them to load models)
+        const drivers = this.registry.getAllDrivers();
+        await Promise.all(drivers.map(driver => driver.spawn().catch(err => {
+            console.error('[LifecycleManager] Failed to spawn driver:', err);
+        })));
+
         const adapters = this.registry.getAllAdapters();
         await Promise.all(adapters.map(adapter => adapter.start().catch(err => {
             console.error('[LifecycleManager] Failed to start adapter:', err);

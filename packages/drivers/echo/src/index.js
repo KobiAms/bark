@@ -9,6 +9,10 @@ export class EchoDriver extends IDriver {
         this.activeIntervals = new Map(); // sessionId -> NodeJS.Timeout
     }
 
+    getModels() {
+        return ['echo'];
+    }
+
     async spawn(config) {
         console.log('[EchoDriver] Spawned with config:', config);
     }

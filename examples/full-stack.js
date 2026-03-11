@@ -1,8 +1,8 @@
 import { BarkCore } from '@bark/core';
-import { EchoDriver } from '@bark/driver-echo';
 import { ClaudeCodeDriver } from '@bark/driver-claude-code';
 import { GeminiDriver } from '@bark/driver-gemini';
 import { OpenCodeDriver } from '@bark/driver-opencode';
+import { CursorDriver } from '@bark/driver-cursor';
 import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
 import path from 'path';
 import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, CompactCommand } from '@bark/commands-core';
@@ -22,7 +22,7 @@ async function main() {
     bark.useDriver('claude', new ClaudeCodeDriver({ model: 'haiku' }));
     bark.useDriver('gemini', new GeminiDriver());
     bark.useDriver('opencode', new OpenCodeDriver());
-    bark.useDriver('echo', new EchoDriver());
+    bark.useDriver('cursor', new CursorDriver());
 
     // 3. Adapters
     if (process.env.TELEGRAM_TOKEN) {
