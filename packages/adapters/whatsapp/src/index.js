@@ -55,7 +55,18 @@ export class WhatsAppAdapter extends IAdapter {
 
         this.client = new Client({
             authStrategy: new LocalAuth({ dataPath: '.wwebjs_auth' }),
-            puppeteer: { headless: true, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false },
+            puppeteer: {
+                headless: true,
+                handleSIGINT: false,
+                handleSIGTERM: false,
+                handleSIGHUP: false,
+                args: [
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--no-first-run',
+                    '--no-zygote',
+                ],
+            },
         });
 
         this.client.on('qr', (qr) => {

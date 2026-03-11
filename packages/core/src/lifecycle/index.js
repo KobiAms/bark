@@ -19,6 +19,7 @@ export class LifecycleManager {
     async start() {
         if (this.isStarted) return;
 
+        process.title = 'bark';
         console.log('[LifecycleManager] Starting Bark Core...');
         this.router.start();
 

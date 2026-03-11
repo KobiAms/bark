@@ -1,15 +1,19 @@
 import { IAdapter } from '@bark/core';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { dirname } from 'path';
 
 export class TelegramAdapter extends IAdapter {
     /**
-     * @param {Object} config 
+     * @param {Object} config
      * @param {string} config.token - Telegram Bot Token
      * @param {string} [config.chatId] - Optional pinned chat ID to listen to
+     * @param {string} [config.stateFile] - Path to persist chatId across restarts
      */
     constructor(config) {
         super();
         this.token = config.token;
-        this.chatId = config.chatId || null;
+        this.stateFile = config.stateFile || null;
+        this.chatId = config.chatId || this._loadChatId() || null;
         this.polling = false;
         this.lastUpdateId = 0;
         this.pollTimeout = null;
@@ -95,15 +99,17 @@ export class TelegramAdapter extends IAdapter {
                 parse_mode: 'Markdown',
             });
         } catch (err) {
-            // Retry as plain text if Markdown parse fails
             if (err.message?.includes('parse')) {
-                try {
-                    await this._api('editMessageText', {
-                        chat_id: this.chatId,
-                        message_id: Number(messageId),
-                        text,
-                    });
-                } catch { /* ignore */ }
+                // Retry as plain text if Markdown parse fails
+                await this._api('editMessageText', {
+                    chat_id: this.chatId,
+                    message_id: Number(messageId),
+                    text,
+                }).catch(() => {});
+            } else if (!err.message?.includes('message is not modified')) {
+                // Rethrow so callers (e.g. _editOrSend) can fall back to sendMessage.
+                // "message is not modified" is harmless — silently ignore it.
+                throw err;
             }
         }
     }
@@ -119,6 +125,30 @@ export class TelegramAdapter extends IAdapter {
 
     onError(cb) {
         this.errorCb = cb;
+    }
+
+    // --- State Persistence ---
+
+    _loadChatId() {
+        if (!this.stateFile) return null;
+        try {
+            const data = JSON.parse(readFileSync(this.stateFile, 'utf8'));
+            if (data.chatId) {
+                console.log(`[TelegramAdapter] Restored chatId from state: ${data.chatId}`);
+                return data.chatId;
+            }
+        } catch { /* file doesn't exist yet */ }
+        return null;
+    }
+
+    _saveChatId(chatId) {
+        if (!this.stateFile) return;
+        try {
+            mkdirSync(dirname(this.stateFile), { recursive: true });
+            writeFileSync(this.stateFile, JSON.stringify({ chatId }), 'utf8');
+        } catch (err) {
+            console.error('[TelegramAdapter] Failed to save state:', err.message);
+        }
     }
 
     // --- Internal Telegram API Logic ---
@@ -163,6 +193,7 @@ export class TelegramAdapter extends IAdapter {
                     // Auto-lock chat ID on first message
                     if (!this.chatId) {
                         this.chatId = String(msg.chat.id);
+                        this._saveChatId(this.chatId);
                         console.log(`[TelegramAdapter] Auto-locked to chat: ${this.chatId}`);
                     }
 

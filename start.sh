@@ -1,8 +1,15 @@
 #!/bin/bash
 # Bark startup script — automatically restarts on /restart command.
 # Ctrl+C cleanly stops everything.
+#
+# Usage: bash start.sh [entrypoint] [envfile]
+#   entrypoint  JS file to run  (default: examples/full-stack.js)
+#   envfile     env file to use (default: .env)
 
-echo "🐕 Starting Bark..."
+ENTRY="${1:-examples/full-stack.js}"
+ENV_FILE="${2:-.env}"
+
+echo "🐕 Starting Bark... ($ENTRY)"
 
 # Trap Ctrl+C and SIGTERM — kill the child process and exit the loop
 cleanup() {
@@ -18,7 +25,7 @@ cleanup() {
 trap cleanup INT TERM
 
 while true; do
-    node --env-file=.env examples/full-stack.js &
+    node --env-file="$ENV_FILE" "$ENTRY" &
     CHILD_PID=$!
     wait "$CHILD_PID"
     EXIT_CODE=$?

@@ -32,15 +32,19 @@ Bark is a lightweight, framework-agnostic AI agent orchestration engine. It prov
 - `@bark/command-agents` - Agent management commands (`/new`, `/restart`).
 
 ## Quick Start
-To run the full stack example tying all these modules together:
-```bash
-# Clone the repo and install dependencies
-git clone https://github.com/your-username/bark.git
-cd bark
-yarn install
 
-# Execute the pre-built multi-adapter example 
-TELEGRAM_TOKEN="your_token" WA_GROUP="Bark Devs" node examples/full-stack.js
+The easiest way to get started is the interactive setup skill. Open this repo in Claude Code and run:
+
+```
+/setup
+```
+
+It will interview you about which adapters and drivers you want, generate a ready-to-run config, and launch Bark for you. See [`SETUP.md`](./SETUP.md) for details.
+
+**Manual setup:**
+```bash
+yarn install
+node --env-file=.env examples/full-stack.js
 ```
 
 ## Creating Extensions

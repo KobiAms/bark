@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "start": "bash start.sh",
-    "start:once": "node --env-file=.env examples/full-stack.js",
+    "start:telegram": "bash start.sh examples/claude-gemini-telegram.js .env.local.telegram",
     "test": "vitest",
     "test:ui": "vitest --ui"
   }
