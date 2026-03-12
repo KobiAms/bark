@@ -229,7 +229,8 @@ export class TelegramAdapter extends IAdapter {
                             const from = q.from || {};
                             quotedMessageMetadata = {
                                 senderName: from.username || from.first_name || 'unknown',
-                                messageId: String(q.message_id)
+                                messageId: String(q.message_id),
+                                content: q.text || q.caption || ''
                             };
                         }
 

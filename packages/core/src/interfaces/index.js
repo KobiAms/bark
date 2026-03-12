@@ -10,6 +10,7 @@
  * @property {Object} [quotedMessageMetadata] - Optional metadata about a message being replied to
  * @property {string} [quotedMessageMetadata.senderName] - The name of the agent or user being replied to
  * @property {string} [quotedMessageMetadata.messageId] - The platform-specific ID of the message being replied to
+ * @property {string} [quotedMessageMetadata.content] - The text content of the quoted message
  * @property {Error} [error] - Error object, if this is an error event
  * @property {Date} timestamp - Time the event occurred
  */

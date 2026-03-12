@@ -180,6 +180,12 @@ async _resolveRouting(event) {
 
                 const nameIndex = payload.indexOf('@' + rawName);
                 targetPayload = payload.substring(nameIndex + rawName.length + 1).trim();
+
+                // If replying to a message with quoted content, prepend it for context
+                if (event.quotedMessageMetadata?.content) {
+                    const quotedSender = event.quotedMessageMetadata.senderName || 'Previous message';
+                    targetPayload = `[${quotedSender} said:]\n${event.quotedMessageMetadata.content}\n\n${targetPayload}`;
+                }
             }
         }
     }

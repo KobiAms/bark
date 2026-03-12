@@ -157,9 +157,10 @@ export class WhatsAppAdapter extends IAdapter {
                 const contact = await quotedMsg.getContact();
                 const senderName = contact.pushname || contact.name || contact.shortName;
                 if (senderName) {
-                    quotedMessageMetadata = { 
+                    quotedMessageMetadata = {
                         senderName,
-                        messageId: quotedMsg.id._serialized
+                        messageId: quotedMsg.id._serialized,
+                        content: quotedMsg.body || ''
                     };
                 }
             } catch (err) {
