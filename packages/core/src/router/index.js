@@ -57,7 +57,8 @@ export class MessageRouter {
             this.eventBus.subscribe(EventTypes.STREAM_CHUNK,      (event) => this._onStreamChunk(event)),
             this.eventBus.subscribe(EventTypes.STREAM_PROGRESS,   (event) => this._onStreamProgress(event)),
             this.eventBus.subscribe(EventTypes.DRIVER_COMPLETE,   (event) => this._onDriverComplete(event)),
-            this.eventBus.subscribe(EventTypes.COMMAND_COMPLETE,  (event) => this._onCommandComplete(event))
+            this.eventBus.subscribe(EventTypes.COMMAND_COMPLETE,  (event) => this._onCommandComplete(event)),
+            this.eventBus.subscribe(EventTypes.FILE_READY,        (event) => this._onFileReady(event))
         );
     }
 
@@ -150,6 +151,25 @@ async _onCommandComplete(event) {
     if (sent?.messageId) {
         this.liveMessageIds.set(event.sessionId, sent.messageId);
     }
+}
+
+/**
+ * Handle file ready events from drivers.
+ * @param {import('../interfaces/index.js').BarkEvent} event
+ */
+async _onFileReady(event) {
+    if (!event.filePath) return;
+    const r = this._getAdapterAndReplyTo(event.sessionId);
+    if (!r?.adapter) return;
+
+    await r.adapter.sendFile(r.replyTo, {
+        filePath: event.filePath,
+        mimeType: event.mimeType,
+        fileName: event.fileName,
+        caption: event.caption
+    }, { replyToMessageId: r.lastMessageId }).catch(err => {
+        this.logger.error(`[MessageRouter] Failed to send file for session '${event.sessionId}':`, err);
+    });
 }
 
 /**

@@ -286,6 +286,31 @@ export class WhatsAppAdapter extends IAdapter {
         await this.groupChat.sendMessage(text).catch(() => {});
     }
 
+    async sendFile(sessionId, fileData, metadata = {}) {
+        if (!this.groupChat) throw new Error('[WhatsAppAdapter] not connected to target group');
+
+        try {
+            const { MessageMedia } = await import('whatsapp-web.js');
+            const media = await MessageMedia.fromFilePath(fileData.filePath);
+
+            const options = {};
+            if (fileData.caption) {
+                options.caption = fileData.caption;
+            }
+            if (metadata.replyToMessageId) {
+                options.quotedMessageId = metadata.replyToMessageId;
+            }
+
+            const sent = await this.groupChat.sendMessage(media, options);
+            this.msgCache.set(sent.id._serialized, sent);
+            this.logger.log(`[WhatsAppAdapter] Sent file: ${fileData.fileName || 'untitled'}`);
+            return { messageId: sent.id._serialized };
+        } catch (err) {
+            this.logger.error('[WhatsAppAdapter] Failed to send file:', err.message);
+            throw err;
+        }
+    }
+
     onMessage(cb) {
         this.messageCb = cb;
     }

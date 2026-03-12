@@ -91,6 +91,21 @@ export class IAdapter {
     async announce(text) { /* no-op by default */ }
 
     /**
+     * Send a file/media to the originating session.
+     * No-op by default — adapters that don't support file sending simply inherit this.
+     * @param {string} sessionId
+     * @param {Object} fileData
+     * @param {string} fileData.filePath - Path to local file to send
+     * @param {string} fileData.mimeType - MIME type (e.g. 'image/png', 'application/pdf')
+     * @param {string} [fileData.fileName] - Display name for the file
+     * @param {string} [fileData.caption] - Optional caption or description
+     * @param {Object} [metadata]
+     * @param {string} [metadata.replyToMessageId]
+     * @returns {Promise<{messageId?: string}|void>}
+     */
+    async sendFile(sessionId, fileData, metadata = {}) { /* no-op by default */ }
+
+    /**
      * Register a callback for incoming messages from the platform.
      * @param {function(BarkEvent):void} cb
      */
@@ -167,6 +182,13 @@ export class IDriver {
      * @param {function({sessionId: string, result: any, driverState?: Object}):void} cb
      */
     onComplete(cb) { throw new NotImplementedError('onComplete'); }
+
+    /**
+     * Register a callback when a file is ready to send.
+     * Optional: drivers that don't generate files simply never call this.
+     * @param {function({sessionId: string, filePath: string, mimeType: string, fileName?: string, caption?: string}):void} cb
+     */
+    onFileReady(cb) { /* no-op by default */ }
 
     /**
      * Return the list of models this driver supports.

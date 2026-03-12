@@ -63,6 +63,14 @@ export class BarkCore {
             this.eventBus.publish({ type: EventTypes.DRIVER_COMPLETE, ...compEvent });
         });
 
+        driver.onFileReady?.((fileEvent) => {
+            this.eventBus.publish({
+                type: EventTypes.FILE_READY,
+                ...fileEvent,
+                timestamp: new Date()
+            });
+        });
+
         return this;
     }
 

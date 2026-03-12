@@ -129,6 +129,54 @@ export class TelegramAdapter extends IAdapter {
         await this._api('sendMessage', { chat_id: this.chatId, text }).catch(() => {});
     }
 
+    async sendFile(sessionId, fileData, metadata = {}) {
+        if (!this.chatId) throw new Error('[TelegramAdapter] not connected to chat');
+
+        try {
+            const { readFileSync } = await import('fs');
+            const fileContent = readFileSync(fileData.filePath);
+
+            // Determine method based on MIME type
+            let method = 'sendDocument'; // default for unknown types
+            if (fileData.mimeType?.startsWith('image/')) {
+                method = 'sendPhoto';
+            } else if (fileData.mimeType?.startsWith('audio/')) {
+                method = 'sendAudio';
+            } else if (fileData.mimeType?.startsWith('video/')) {
+                method = 'sendVideo';
+            }
+
+            const body = new FormData();
+            body.append('chat_id', this.chatId);
+            body.append(method === 'sendPhoto' ? 'photo' : method === 'sendAudio' ? 'audio' : method === 'sendVideo' ? 'video' : 'document',
+                new Blob([fileContent], { type: fileData.mimeType }),
+                fileData.fileName || 'file'
+            );
+
+            if (fileData.caption) {
+                body.append('caption', fileData.caption);
+            }
+
+            if (metadata.replyToMessageId) {
+                body.append('reply_to_message_id', Number(metadata.replyToMessageId));
+            }
+
+            const res = await fetch(`${this.BASE_URL}/${method}`, {
+                method: 'POST',
+                body
+            });
+
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.description);
+
+            this.logger.log(`[TelegramAdapter] Sent file: ${fileData.fileName || 'untitled'}`);
+            return { messageId: String(data.result.message_id) };
+        } catch (err) {
+            this.logger.error('[TelegramAdapter] Failed to send file:', err.message);
+            throw err;
+        }
+    }
+
     onMessage(cb) {
         this.messageCb = cb;
     }
