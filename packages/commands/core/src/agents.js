@@ -9,13 +9,12 @@ export class NewCommand extends ICommand {
         return { usage: '/new <name> [<driver>] [--model <m>] [--prompt <p>]', description: 'Create a new agent', group: 'Agents' };
     }
 
-    async execute({ sessionId, payload, registry, eventBus }) {
+    async execute({ payload, registry }) {
         const parts = payload.split(' ');
         const name = parts[1];
 
         if (!name || name.startsWith('--')) {
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: '❌ Usage: /new <name> [<driver>] [--model <model>] [--prompt <prompt>]' });
-            return;
+            return '❌ Usage: /new <name> [<driver>] [--model <model>] [--prompt <prompt>]';
         }
 
         // Support both positional (/new <name> <driver>) and flag (/new <name> --driver <d>)
@@ -32,16 +31,13 @@ export class NewCommand extends ICommand {
 
         const agentRegistry = registry.getAgentRegistry();
         if (!agentRegistry) {
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: '❌ Error: No agent registry configured.' });
-            return;
+            return '❌ Error: No agent registry configured.';
         }
 
         await agentRegistry.saveAgent(name, { driver, systemPrompt, model });
 
         const modelSuffix = model ? ` (${model})` : '';
-        const msg = `✅ Created agent: *${name}* using driver *${driver}*${modelSuffix}`;
-        eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
-        eventBus.publish({ type: 'command.complete', sessionId, result: msg });
+        return `✅ Created agent: *${name}* using driver *${driver}*${modelSuffix}`;
     }
 }
 
@@ -54,12 +50,11 @@ export class DeleteCommand extends ICommand {
         return { usage: '/delete <name>', description: 'Delete an agent', group: 'Agents' };
     }
 
-    async execute({ sessionId, payload, registry, eventBus }) {
+    async execute({ payload, registry }) {
         const name = payload.split(' ')[1];
 
         if (!name) {
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: '❌ Usage: /delete <name>' });
-            return;
+            return '❌ Usage: /delete <name>';
         }
 
         const agentRegistry = registry.getAgentRegistry();
@@ -67,8 +62,7 @@ export class DeleteCommand extends ICommand {
 
         const agent = await agentRegistry.getAgent(name);
         if (!agent) {
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: `❌ Agent *${name}* not found.` });
-            return;
+            return `❌ Agent *${name}* not found.`;
         }
 
         await agentRegistry.deleteAgent(name);
@@ -78,9 +72,7 @@ export class DeleteCommand extends ICommand {
             await storage.deleteSessionsByPrefix(`${name}:`);
         }
 
-        const msg = `🗑️ Deleted agent: *${name}* and its session memory.`;
-        eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
-        eventBus.publish({ type: 'command.complete', sessionId, result: msg });
+        return `🗑️ Deleted agent: *${name}* and its session memory.`;
     }
 }
 
@@ -93,17 +85,14 @@ export class ListAgentsCommand extends ICommand {
         return { usage: '/agents', description: 'List all agents', group: 'Agents' };
     }
 
-    async execute({ sessionId, registry, eventBus }) {
+    async execute({ registry }) {
         try {
             const agentRegistry = registry.getAgentRegistry();
             if (!agentRegistry) return;
 
             const agents = await agentRegistry.listAgents();
             if (agents.length === 0) {
-                const msg = '🐾 No agents registered yet. Use `/new <name>` to spawn one!';
-                eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
-                eventBus.publish({ type: 'command.complete', sessionId, result: msg });
-                return;
+                return '🐾 No agents registered yet. Use `/new <name>` to spawn one!';
             }
 
             let msg = '🤖 *Active Agents:*\n';
@@ -112,11 +101,10 @@ export class ListAgentsCommand extends ICommand {
                 msg += `- *${a.name}* (*${a.driver}*${modelLabel})${a.systemPrompt ? ' | ' + a.systemPrompt.substring(0, 30) + '...' : ''}\n`;
             });
 
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
-            eventBus.publish({ type: 'command.complete', sessionId, result: msg });
+            return msg;
         } catch (err) {
             this.logger.error('[ListAgentsCommand] Error:', err);
-            eventBus.publish({ type: 'command.complete', sessionId, result: '❌ Error listing agents: ' + err.message });
+            return '❌ Error listing agents: ' + err.message;
         }
     }
 }
@@ -130,32 +118,27 @@ export class SetModelCommand extends ICommand {
         return { usage: '/setmodel <agent> <model>', description: "Update an agent's model", group: 'Agents' };
     }
 
-    async execute({ sessionId, payload, registry, eventBus }) {
+    async execute({ payload, registry }) {
         const parts = payload.split(' ');
         const name = parts[1];
         const model = parts[2];
 
         if (!name || !model) {
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: '❌ Usage: /setmodel <agent> <model>' });
-            return;
+            return '❌ Usage: /setmodel <agent> <model>';
         }
 
         const agentRegistry = registry.getAgentRegistry();
         if (!agentRegistry) {
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: '❌ Error: No agent registry configured.' });
-            return;
+            return '❌ Error: No agent registry configured.';
         }
 
         const existingConfig = await agentRegistry.getAgent(name);
         if (!existingConfig) {
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: `❌ Agent *${name}* not found.` });
-            return;
+            return `❌ Agent *${name}* not found.`;
         }
 
         await agentRegistry.saveAgent(name, { ...existingConfig, model });
 
-        const msg = `✅ *${name}* will now use model *${model}*`;
-        eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
-        eventBus.publish({ type: 'command.complete', sessionId, result: msg });
+        return `✅ *${name}* will now use model *${model}*`;
     }
 }

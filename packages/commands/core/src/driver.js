@@ -9,23 +9,17 @@ export class SwitchDriverCommand extends ICommand {
         return { usage: '/driver <name>', description: 'Switch AI driver for this session', group: 'Drivers' };
     }
 
-    async execute({ sessionId, payload, registry, eventBus, storage }) {
+    async execute({ sessionId, payload, registry, storage }) {
         const parts = payload.trim().split(' ');
         const desiredDriver = parts[1];
 
         if (!desiredDriver) {
             const availableDrivers = Array.from(registry.drivers.keys()).join(', ');
-            const msg = `Usage: /driver <name>. Available: ${availableDrivers}`;
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
-            eventBus.publish({ type: 'command.complete', sessionId, result: msg });
-            return;
+            return `Usage: /driver <name>. Available: ${availableDrivers}`;
         }
 
         if (!registry.getDriver(desiredDriver)) {
-            const msg = `[System] Error: Driver '${desiredDriver}' is not registered.`;
-            eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg + '\n' });
-            eventBus.publish({ type: 'command.complete', sessionId, result: msg });
-            return;
+            return `[System] Error: Driver '${desiredDriver}' is not registered.`;
         }
 
         let session = await storage.getSession(sessionId);
@@ -36,8 +30,6 @@ export class SwitchDriverCommand extends ICommand {
         }
         await storage.saveSession(sessionId, session);
 
-        const msg = `[System] Switched to driver: ${desiredDriver}`;
-        eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg + '\n' });
-        eventBus.publish({ type: 'command.complete', sessionId, result: msg });
+        return `[System] Switched to driver: ${desiredDriver}`;
     }
 }

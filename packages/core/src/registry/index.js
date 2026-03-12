@@ -90,16 +90,6 @@ export class ExtensionRegistry {
         if (typeof plugin.inputEvent !== 'string' || typeof plugin.outputEvent !== 'string') {
             throw new Error(`[ExtensionRegistry] Plugin must declare string inputEvent and outputEvent getters.`);
         }
-        if (this.plugins.length > 0) {
-            const prev = this.plugins[this.plugins.length - 1];
-            if (plugin.inputEvent !== prev.outputEvent) {
-                this.logger.warn(
-                    `[ExtensionRegistry] Plugin chain gap: previous plugin outputs '${prev.outputEvent}' ` +
-                    `but new plugin subscribes to '${plugin.inputEvent}'. ` +
-                    `This may be intentional (parallel plugins) or a misconfiguration.`
-                );
-            }
-        }
         this.plugins.push(plugin);
     }
 
@@ -115,4 +105,3 @@ export class ExtensionRegistry {
     getAllPlugins() { return [...this.plugins]; }
 }
 
-export const defaultExtensionRegistry = new ExtensionRegistry();

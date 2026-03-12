@@ -6,28 +6,29 @@ import readline from 'readline';
 
 export class JsonlStorage extends IStorage {
     /**
-     * @param {Object} options
-     * @param {string} options.filePath - Path to the sessions.jsonl file
+     * @param {Object} [options]
+     * @param {string|null} [options.filePath] - Path to the sessions.jsonl file. Omit or pass null for in-memory only.
      */
     constructor(options = {}) {
         super();
-        this.filePath = options.filePath || path.resolve(process.cwd(), 'sessions.jsonl');
+        this.filePath = options.filePath || null;
         this.sessions = new Map();
-        this.initialized = false;
-        
-        // Ensure directory exists
-        const dir = path.dirname(this.filePath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        if (!fs.existsSync(this.filePath)) {
-            fs.writeFileSync(this.filePath, '');
+        this.initialized = !this.filePath;
+
+        if (this.filePath) {
+            const dir = path.dirname(this.filePath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            if (!fs.existsSync(this.filePath)) {
+                fs.writeFileSync(this.filePath, '');
+            }
         }
     }
 
     async _ensureInitialized() {
         if (this.initialized) return;
-        
+
         const fileStream = fs.createReadStream(this.filePath);
         const rl = readline.createInterface({
             input: fileStream,
@@ -64,13 +65,17 @@ export class JsonlStorage extends IStorage {
     async saveSession(sessionId, state) {
         await this._ensureInitialized();
         this.sessions.set(sessionId, state);
-        await fsPromises.appendFile(this.filePath, JSON.stringify({ sessionId, state, timestamp: Date.now() }) + '\n');
+        if (this.filePath) {
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ sessionId, state, timestamp: Date.now() }) + '\n');
+        }
     }
 
     async deleteSession(sessionId) {
         await this._ensureInitialized();
         this.sessions.delete(sessionId);
-        await fsPromises.appendFile(this.filePath, JSON.stringify({ sessionId, deleted: true, timestamp: Date.now() }) + '\n');
+        if (this.filePath) {
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ sessionId, deleted: true, timestamp: Date.now() }) + '\n');
+        }
     }
 
     async deleteSessionsByPrefix(prefix) {
@@ -80,10 +85,13 @@ export class JsonlStorage extends IStorage {
                 this.sessions.delete(sessionId);
             }
         }
-        await fsPromises.appendFile(this.filePath, JSON.stringify({ deletedByPrefix: true, prefix, timestamp: Date.now() }) + '\n');
+        if (this.filePath) {
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ deletedByPrefix: true, prefix, timestamp: Date.now() }) + '\n');
+        }
     }
 
     async compact() {
+        if (!this.filePath) return;
         await this._ensureInitialized();
         const lines = [];
         for (const [sessionId, state] of this.sessions.entries()) {
@@ -96,27 +104,29 @@ export class JsonlStorage extends IStorage {
 
 export class JsonlAgentRegistry extends IAgentRegistry {
     /**
-     * @param {Object} options
-     * @param {string} options.filePath - Path to the agents.jsonl file
+     * @param {Object} [options]
+     * @param {string|null} [options.filePath] - Path to the agents.jsonl file. Omit or pass null for in-memory only.
      */
     constructor(options = {}) {
         super();
-        this.filePath = options.filePath || path.resolve(process.cwd(), 'agents.jsonl');
+        this.filePath = options.filePath || null;
         this.agents = new Map();
-        this.initialized = false;
+        this.initialized = !this.filePath;
 
-        const dir = path.dirname(this.filePath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        if (!fs.existsSync(this.filePath)) {
-            fs.writeFileSync(this.filePath, '');
+        if (this.filePath) {
+            const dir = path.dirname(this.filePath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            if (!fs.existsSync(this.filePath)) {
+                fs.writeFileSync(this.filePath, '');
+            }
         }
     }
 
     async _ensureInitialized() {
         if (this.initialized) return;
-        
+
         const fileStream = fs.createReadStream(this.filePath);
         const rl = readline.createInterface({
             input: fileStream,
@@ -148,13 +158,17 @@ export class JsonlAgentRegistry extends IAgentRegistry {
     async saveAgent(name, config) {
         await this._ensureInitialized();
         this.agents.set(name, config);
-        await fsPromises.appendFile(this.filePath, JSON.stringify({ name, config, timestamp: Date.now() }) + '\n');
+        if (this.filePath) {
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ name, config, timestamp: Date.now() }) + '\n');
+        }
     }
 
     async deleteAgent(name) {
         await this._ensureInitialized();
         this.agents.delete(name);
-        await fsPromises.appendFile(this.filePath, JSON.stringify({ name, deleted: true, timestamp: Date.now() }) + '\n');
+        if (this.filePath) {
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ name, deleted: true, timestamp: Date.now() }) + '\n');
+        }
     }
 
     async listAgents() {
@@ -166,6 +180,7 @@ export class JsonlAgentRegistry extends IAgentRegistry {
     }
 
     async compact() {
+        if (!this.filePath) return;
         await this._ensureInitialized();
         const lines = [];
         for (const [name, config] of this.agents.entries()) {
@@ -174,4 +189,13 @@ export class JsonlAgentRegistry extends IAgentRegistry {
         await fsPromises.writeFile(this.filePath, lines.join('\n') + (lines.length > 0 ? '\n' : ''));
         this.logger.log(`[JsonlAgentRegistry] Compacted: ${lines.length} agents`);
     }
+}
+
+// In-memory convenience aliases (no file persistence)
+export class MemoryStorage extends JsonlStorage {
+    constructor() { super(); }
+}
+
+export class MemoryAgentRegistry extends JsonlAgentRegistry {
+    constructor() { super(); }
 }

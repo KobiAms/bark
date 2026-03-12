@@ -33,7 +33,6 @@ function getAllowedExternalDeps(pkgName) {
     // Platform-specific libs are allowed per package
     const ALLOWED = {
         '@bark/adapter-whatsapp': ['qrcode', 'qrcode-terminal', 'whatsapp-web.js'],
-        '@bark/driver-claude-code': ['node-pty'],
     };
     return ALLOWED[pkgName] || [];
 }

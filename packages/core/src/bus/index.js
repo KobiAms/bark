@@ -42,15 +42,5 @@ export class EventBus {
         return () => this.emitter.off(eventType, listener);
     }
 
-    /**
-     * Subscribe to all events.
-     * @param {function(import('../interfaces/index.js').BarkEvent):void} listener 
-     * @returns {function():void}
-     */
-    subscribeAll(listener) {
-        this.emitter.on('*', listener);
-        return () => this.emitter.off('*', listener);
-    }
 }
 
-export const defaultEventBus = new EventBus();

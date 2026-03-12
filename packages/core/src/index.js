@@ -1,8 +1,8 @@
 export * from './interfaces/index.js';
-export { EventBus, defaultEventBus } from './bus/index.js';
-export { ExtensionRegistry, defaultExtensionRegistry } from './registry/index.js';
+export { EventBus } from './bus/index.js';
+export { ExtensionRegistry } from './registry/index.js';
 export { MessageRouter } from './router/index.js';
-export { ConsoleLogger, SilentLogger } from './logger/index.js';
+export { ConsoleLogger } from './logger/index.js';
 
 /**
  * Bark Core Application class.
@@ -105,6 +105,15 @@ export class BarkCore {
     usePlugin(plugin) {
         this.registry.registerPlugin(plugin);
         plugin.setLogger(this.logger);
+        return this;
+    }
+
+    /**
+     * Set the default driver for unrouted messages.
+     * @param {string} name 
+     */
+    setDefaultDriver(name) {
+        this.router.setDefaultDriver(name);
         return this;
     }
 

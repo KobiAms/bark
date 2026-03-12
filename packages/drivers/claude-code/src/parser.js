@@ -1,20 +1,6 @@
-/**
- * Claude Code stream-json parser
- * Processes output from `claude -p --output-format stream-json --verbose`
- */
+import { toolIcon, buildProgressText } from '@bark/driver-shared';
 
-const TOOL_ICONS = {
-    Bash: '💻', Read: '📖', Edit: '✏️', Write: '📝', Grep: '🔍', Glob: '📂',
-    WebFetch: '🌐', WebSearch: '🌐', Skill: '⚡', Task: '🔀',
-};
-
-function toolIcon(name) {
-    for (const [key, icon] of Object.entries(TOOL_ICONS)) {
-        if (name.startsWith(key) || name.includes(key)) return icon;
-    }
-    if (name.startsWith('mcp__')) return '🔌';
-    return '🔧';
-}
+export { buildProgressText };
 
 export function parseLine(line) {
     if (!line.trim()) return null;
@@ -39,7 +25,6 @@ export function parseLine(line) {
             }
         }
 
-        // Fallback: higher-level assistant event (emitted without --verbose)
         if (data.type === 'assistant') {
             const contents = data.message?.content || [];
             for (const content of contents) {
@@ -57,33 +42,4 @@ export function parseLine(line) {
     } catch {
         return null;
     }
-}
-
-/**
- * Build a short human-readable progress string from accumulated state.
- * @param {string} progressText - accumulated thinking/text so far
- * @param {Array<{icon:string, name:string}>} tools - tools used so far
- * @returns {string}
- */
-export function buildProgressText(progressText, tools) {
-    const lines = [];
-    const PREVIEW_LEN = 300;
-
-    if (progressText) {
-        const isTruncated = progressText.length > PREVIEW_LEN;
-        let preview = progressText.slice(-PREVIEW_LEN).trim().replace(/\n/g, ' ');
-        if (isTruncated) {
-            // Cut at first word boundary to avoid mid-word chop
-            const firstSpace = preview.indexOf(' ');
-            if (firstSpace > 0) preview = preview.substring(firstSpace + 1);
-            preview = '…' + preview;
-        }
-        lines.push(`_${preview}_`);
-    }
-
-    if (tools.length > 0) {
-        lines.push(tools.slice(-5).map(t => `${t.icon} ${t.name}`).join(' → '));
-    }
-
-    return lines.length > 0 ? lines.join('\n') : '_thinking..._';
 }

@@ -9,7 +9,7 @@ export class ModelsCommand extends ICommand {
         return { usage: '/models [driver]', description: 'List available models per driver', group: 'System' };
     }
 
-    async execute({ sessionId, payload, registry, eventBus }) {
+    async execute({ payload, registry }) {
         const arg = typeof payload === 'string' ? payload.trim().replace(/^\/models\s*/i, '').trim() : '';
         const lines = [];
 
@@ -17,8 +17,7 @@ export class ModelsCommand extends ICommand {
             // Show models for a specific driver
             const driver = registry.drivers.get(arg);
             if (!driver) {
-                eventBus.publish({ type: 'command.complete', sessionId, result: `❌ Unknown driver: \`${arg}\`` });
-                return;
+                return `❌ Unknown driver: \`${arg}\``;
             }
             const models = typeof driver.getModels === 'function' ? driver.getModels() : [];
             lines.push(`*${arg}* — ${models.length} model(s)`);
@@ -34,6 +33,6 @@ export class ModelsCommand extends ICommand {
             }
         }
 
-        eventBus.publish({ type: 'command.complete', sessionId, result: lines.join('\n') });
+        return lines.join('\n');
     }
 }

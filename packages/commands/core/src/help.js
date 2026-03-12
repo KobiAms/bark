@@ -9,7 +9,7 @@ export class HelpCommand extends ICommand {
         return { usage: '/help', description: 'Show this message', group: 'System' };
     }
 
-    async execute({ sessionId, registry, storage, eventBus }) {
+    async execute({ sessionId, registry, storage }) {
         try {
             // Resolve active driver for this session
             let activeDriver = null;
@@ -64,10 +64,10 @@ export class HelpCommand extends ICommand {
             }
             lines.push(`Active driver: *${activeDriver}*`);
 
-            eventBus.publish({ type: 'command.complete', sessionId, result: lines.join('\n') });
+            return lines.join('\n');
         } catch (err) {
             this.logger.error('[HelpCommand] Error:', err);
-            eventBus.publish({ type: 'command.complete', sessionId, result: '❌ Error generating help: ' + err.message });
+            return '❌ Error generating help: ' + err.message;
         }
     }
 }
