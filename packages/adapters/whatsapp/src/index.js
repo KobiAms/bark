@@ -151,7 +151,9 @@ export class WhatsAppAdapter extends IAdapter {
                 // Wire up inbound message handler
                 this.client.on('message_create', async (msg) => {
                     if (!this.processInboundMessage) return;
-                    await this.processInboundMessage(msg);
+                    await this.processInboundMessage(msg).catch(err => {
+                        this.logger.error(`[WhatsAppAdapter] Unhandled error in message handler: ${err.message}`);
+                    });
                 });
 
                 resolve();
@@ -171,7 +173,13 @@ export class WhatsAppAdapter extends IAdapter {
     }
 
     async processInboundMessage(msg) {
-        const chat = await msg.getChat();
+        let chat;
+        try {
+            chat = await msg.getChat();
+        } catch (err) {
+            this.logger.warn(`[WhatsAppAdapter] getChat() failed (likely a Channel/broadcast message) — skipping: ${err.message}`);
+            return;
+        }
         if (!chat.isGroup || chat.name !== this.groupName) return;
         if (msg.fromMe) return;
 
