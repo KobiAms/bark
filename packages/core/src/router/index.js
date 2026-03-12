@@ -165,35 +165,8 @@ async _resolveRouting(event) {
     let targetModel = null;
     let targetPayload = payload;
 
-    // A. Reply-To Routing — persisted, survives restart
-    if (agentRegistry && event.quotedMessageMetadata?.messageId) {
-        const agentName = await this._getMessageAgent(event.quotedMessageMetadata.messageId);
-        if (agentName) {
-            const agent = await agentRegistry.getAgent(agentName);
-            if (agent) {
-                targetAgentName = agentName;
-                targetDriverName = agent.driver;
-                targetSystemPrompt = agent.systemPrompt;
-                targetModel = agent.model || null;
-                targetPayload = trimmedPayload;
-            }
-        }
-    }
-
-    // B. senderName fallback (for clients that don't expose messageId)
-    if (!targetAgentName && agentRegistry && event.quotedMessageMetadata?.senderName) {
-        const agent = await agentRegistry.getAgent(event.quotedMessageMetadata.senderName);
-        if (agent) {
-            targetAgentName = event.quotedMessageMetadata.senderName;
-            targetDriverName = agent.driver;
-            targetSystemPrompt = agent.systemPrompt;
-            targetModel = agent.model || null;
-            targetPayload = trimmedPayload;
-        }
-    }
-
-    // C. Mention Detection (@name)
-    if (!targetAgentName && trimmedPayload.startsWith('@')) {
+    // A. Mention Detection (@name) — explicit override takes precedence
+    if (trimmedPayload.startsWith('@')) {
         const parts = trimmedPayload.split(/\s+/);
         const rawName = parts[0].substring(1);
 
@@ -208,6 +181,33 @@ async _resolveRouting(event) {
                 const nameIndex = payload.indexOf('@' + rawName);
                 targetPayload = payload.substring(nameIndex + rawName.length + 1).trim();
             }
+        }
+    }
+
+    // B. Reply-To Routing — persisted, survives restart
+    if (!targetAgentName && agentRegistry && event.quotedMessageMetadata?.messageId) {
+        const agentName = await this._getMessageAgent(event.quotedMessageMetadata.messageId);
+        if (agentName) {
+            const agent = await agentRegistry.getAgent(agentName);
+            if (agent) {
+                targetAgentName = agentName;
+                targetDriverName = agent.driver;
+                targetSystemPrompt = agent.systemPrompt;
+                targetModel = agent.model || null;
+                targetPayload = trimmedPayload;
+            }
+        }
+    }
+
+    // C. senderName fallback (for clients that don't expose messageId)
+    if (!targetAgentName && agentRegistry && event.quotedMessageMetadata?.senderName) {
+        const agent = await agentRegistry.getAgent(event.quotedMessageMetadata.senderName);
+        if (agent) {
+            targetAgentName = event.quotedMessageMetadata.senderName;
+            targetDriverName = agent.driver;
+            targetSystemPrompt = agent.systemPrompt;
+            targetModel = agent.model || null;
+            targetPayload = trimmedPayload;
         }
     }
 
