@@ -11,6 +11,7 @@ import { EventBus } from './bus/index.js';
 import { ExtensionRegistry } from './registry/index.js';
 import { MessageRouter } from './router/index.js';
 import { LifecycleManager } from './lifecycle/index.js';
+import { EventTypes } from './interfaces/index.js';
 
 export class BarkCore {
     constructor() {
@@ -45,16 +46,16 @@ export class BarkCore {
         
         // Wire driver events to the bus
         driver.onStream((streamEvent) => {
-            this.eventBus.publish({ type: 'stream.chunk', ...streamEvent });
+            this.eventBus.publish({ type: EventTypes.STREAM_CHUNK, ...streamEvent });
         });
 
         driver.onProgress((progressEvent) => {
-            this.eventBus.publish({ type: 'stream.progress', ...progressEvent });
+            this.eventBus.publish({ type: EventTypes.STREAM_PROGRESS, ...progressEvent });
         });
 
         driver.onError((error) => console.error(`[Driver Error: ${name}]`, error));
         driver.onComplete((compEvent) => {
-            this.eventBus.publish({ type: 'driver.complete', ...compEvent });
+            this.eventBus.publish({ type: EventTypes.DRIVER_COMPLETE, ...compEvent });
         });
 
         return this;
@@ -80,7 +81,7 @@ export class BarkCore {
 
     /**
      * Attach a Command plugin.
-     * @param {import('./interfaces/index.js').ICommand} command 
+     * @param {import('./interfaces/index.js').ICommand} command
      */
     useCommand(command) {
         this.registry.registerCommand(command);
@@ -88,9 +89,35 @@ export class BarkCore {
     }
 
     /**
+     * Attach an EventBus plugin.
+     * Plugins subscribe to namespaced events and publish transformed events.
+     * Register all plugins before calling start() — they are wired during lifecycle.start().
+     * @param {import('./interfaces/index.js').IPlugin} plugin
+     */
+    usePlugin(plugin) {
+        this.registry.registerPlugin(plugin);
+        return this;
+    }
+
+    /**
+     * Determine the terminal event type the router should subscribe to.
+     * Walks the registered message.received plugin chain and returns the last outputEvent.
+     * Falls back to 'message.received' if no message plugins are registered.
+     * @private
+     */
+    _computeRouterInputEvent() {
+        const messagePlugins = this.registry.getAllPlugins().filter(p =>
+            p.inputEvent === 'message.received' || p.inputEvent.startsWith('message.received.')
+        );
+        if (messagePlugins.length === 0) return 'message.received';
+        return messagePlugins[messagePlugins.length - 1].outputEvent;
+    }
+
+    /**
      * Start the orchestration layer.
      */
     async start() {
+        this.router.setInputEvent(this._computeRouterInputEvent());
         await this.lifecycle.start();
     }
 

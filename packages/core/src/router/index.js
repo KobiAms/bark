@@ -1,3 +1,5 @@
+import { EventTypes } from '../interfaces/index.js';
+
 const DRIVER_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 export class MessageRouter {
@@ -35,19 +37,24 @@ export class MessageRouter {
         this.finishedSessions = new Set();
 
         this._unsubs = [];
+        this.inputEvent = EventTypes.MESSAGE_RECEIVED;
     }
 
     setDefaultDriver(name) {
         this.defaultDriverName = name;
     }
 
+    setInputEvent(eventType) {
+        this.inputEvent = eventType;
+    }
+
     start() {
         this._unsubs.push(
-            this.eventBus.subscribe('message.received', (event) => this.handleIncomingMessage(event)),
-            this.eventBus.subscribe('stream.chunk',     (event) => this._onStreamChunk(event)),
-            this.eventBus.subscribe('stream.progress',  (event) => this._onStreamProgress(event)),
-            this.eventBus.subscribe('driver.complete',  (event) => this._onDriverComplete(event)),
-            this.eventBus.subscribe('command.complete', (event) => this._onCommandComplete(event))
+            this.eventBus.subscribe(this.inputEvent, (event) => this.handleIncomingMessage(event)),
+            this.eventBus.subscribe(EventTypes.STREAM_CHUNK,      (event) => this._onStreamChunk(event)),
+            this.eventBus.subscribe(EventTypes.STREAM_PROGRESS,   (event) => this._onStreamProgress(event)),
+            this.eventBus.subscribe(EventTypes.DRIVER_COMPLETE,   (event) => this._onDriverComplete(event)),
+            this.eventBus.subscribe(EventTypes.COMMAND_COMPLETE,  (event) => this._onCommandComplete(event))
         );
     }
 
@@ -262,7 +269,7 @@ export class MessageRouter {
 
         if (!storage) {
             console.error('[MessageRouter] No storage plugin registered. Cannot process message.');
-            this.eventBus.publish({ type: 'error.occurred', sessionId, error: new Error('No storage plugin') });
+            this.eventBus.publish({ type: EventTypes.ERROR_OCCURRED, sessionId, error: new Error('No storage plugin') });
             return;
         }
 
@@ -400,7 +407,7 @@ export class MessageRouter {
             }
 
             // 5. Run driver with timeout
-            this.eventBus.publish({ type: 'driver.thinking', sessionId: effectiveSessionId });
+            this.eventBus.publish({ type: EventTypes.DRIVER_THINKING, sessionId: effectiveSessionId });
 
             try {
                 const timeoutPromise = new Promise((_, reject) =>
@@ -435,7 +442,7 @@ export class MessageRouter {
 
         } catch (error) {
             console.error(`[MessageRouter] Error processing message for session ${sessionId}:`, error);
-            this.eventBus.publish({ type: 'error.occurred', sessionId, error });
+            this.eventBus.publish({ type: EventTypes.ERROR_OCCURRED, sessionId, error });
             await this._replyToSender(sessionId, `❌ ${error.message}`);
         }
     }

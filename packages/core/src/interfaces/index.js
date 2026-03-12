@@ -256,3 +256,75 @@ export class ICommand {
      */
     describe() { return null; }
 }
+
+/**
+ * IPlugin Contract
+ * EventBus-level participant that subscribes to namespaced events and publishes
+ * transformed events. Ordering is determined by data flow — each plugin declares
+ * what it consumes (inputEvent) and what it produces (outputEvent).
+ *
+ * Convention: event names follow `{noun}.{verb}.{stage}` e.g.
+ *   'message.received'          → raw from adapter
+ *   'message.received.text'     → guaranteed text (e.g. after speech transcription)
+ *   'message.received.enriched' → text + resolved context
+ *   'file.ready'                → file produced by driver output
+ *   'file.ready.pdf'            → converted to PDF
+ *
+ * Plugins MUST spread the original event when publishing:
+ *   eventBus.publish({ ...event, type: this.outputEvent, payload: transformed })
+ * This preserves sessionId, adapterName, rawId, quotedMessageMetadata, etc.
+ */
+export class IPlugin {
+    /**
+     * The event type this plugin subscribes to.
+     * @returns {string}
+     */
+    get inputEvent() { throw new NotImplementedError('inputEvent'); }
+
+    /**
+     * The event type this plugin publishes after transformation.
+     * @returns {string}
+     */
+    get outputEvent() { throw new NotImplementedError('outputEvent'); }
+
+    /**
+     * Called once at startup. Subscribe to inputEvent and publish outputEvent.
+     * @param {import('../bus/index.js').EventBus} eventBus
+     * @returns {void}
+     */
+    register(eventBus) { throw new NotImplementedError('register'); }
+
+    /**
+     * Called at shutdown. Clean up subscriptions or external resources.
+     * @returns {Promise<void>}
+     */
+    async stop() { /* no-op by default */ }
+}
+
+/**
+ * Standard event type constants.
+ * Use these instead of raw strings to avoid typos and enable IDE completion.
+ */
+export const EventTypes = {
+    // Inbound message pipeline
+    MESSAGE_RECEIVED:           'message.received',           // raw from adapter
+    MESSAGE_RECEIVED_TEXT:      'message.received.text',      // guaranteed text
+    MESSAGE_RECEIVED_ENRICHED:  'message.received.enriched',  // text + context
+
+    // File delivery pipeline
+    FILE_READY:                 'file.ready',                 // file from driver output
+    FILE_READY_PDF:             'file.ready.pdf',             // converted to PDF
+
+    // Driver streaming
+    STREAM_CHUNK:               'stream.chunk',
+    STREAM_PROGRESS:            'stream.progress',
+    DRIVER_COMPLETE:            'driver.complete',
+    DRIVER_COMPLETE_INDEXED:    'driver.complete.indexed',    // after vector indexing
+    DRIVER_THINKING:            'driver.thinking',
+
+    // System
+    COMMAND_COMPLETE:           'command.complete',
+    CORE_STARTED:               'core.started',
+    CORE_STOPPED:               'core.stopped',
+    ERROR_OCCURRED:             'error.occurred',
+};

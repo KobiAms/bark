@@ -1,3 +1,5 @@
+import { EventTypes } from '../interfaces/index.js';
+
 export class LifecycleManager {
     /**
      * @param {import('../bus/index.js').EventBus} eventBus 
@@ -23,6 +25,15 @@ export class LifecycleManager {
         console.log('[LifecycleManager] Starting Bark Core...');
         this.router.start();
 
+        // Register plugins on the event bus before adapters start emitting
+        const plugins = this.registry.getAllPlugins();
+        for (const plugin of plugins) {
+            plugin.register(this.eventBus);
+        }
+        if (plugins.length > 0) {
+            console.log(`[LifecycleManager] Registered ${plugins.length} plugin(s).`);
+        }
+
         // Initialize all drivers (spawn them to load models)
         const drivers = this.registry.getAllDrivers();
         await Promise.all(drivers.map(driver => driver.spawn().catch(err => {
@@ -36,7 +47,7 @@ export class LifecycleManager {
 
         this.isStarted = true;
 
-        this.eventBus.publish({ type: 'core.started', sessionId: 'system', timestamp: new Date() });
+        this.eventBus.publish({ type: EventTypes.CORE_STARTED, sessionId: 'system', timestamp: new Date() });
         console.log('[LifecycleManager] Bark Core started.');
 
         // Edit any pending restart messages; returns the adapterName that was edited (if any)
@@ -109,11 +120,15 @@ export class LifecycleManager {
             console.error('[LifecycleManager] Failed to stop driver:', err);
         }));
 
-        await Promise.all([...stopPromises, ...stopDriverPromises]);
+        const stopPluginPromises = this.registry.getAllPlugins().map(plugin => plugin.stop().catch(err => {
+            console.error('[LifecycleManager] Failed to stop plugin:', err);
+        }));
+
+        await Promise.all([...stopPromises, ...stopDriverPromises, ...stopPluginPromises]);
         this.isStarted = false;
 
         this.eventBus.publish({
-            type: 'core.stopped',
+            type: EventTypes.CORE_STOPPED,
             sessionId: 'system',
             timestamp: new Date()
         });

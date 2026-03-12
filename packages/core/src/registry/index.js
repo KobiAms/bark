@@ -1,4 +1,4 @@
-import { IAdapter, IDriver, IStorage, IAgentRegistry, ICommand } from '../interfaces/index.js';
+import { IAdapter, IDriver, IStorage, IAgentRegistry, ICommand, IPlugin } from '../interfaces/index.js';
 
 /**
  * Manages all registered Extensions for the Bark core.
@@ -9,6 +9,7 @@ export class ExtensionRegistry {
         this.adapters = new Map();   // name -> IAdapter
         this.drivers = new Map();    // name -> IDriver
         this.commands = new Set();   // ICommand[]
+        this.plugins = [];           // IPlugin[] ordered by registration
         this.storagePlugin = null;   // IStorage
         this.agentRegistry = null;   // IAgentRegistry
     }
@@ -72,11 +73,32 @@ export class ExtensionRegistry {
     }
 
     /**
-     * @param {ICommand} command 
+     * @param {ICommand} command
      */
     registerCommand(command) {
         this._assertImplements(command, ['match', 'execute'], `Command plugin`);
         this.commands.add(command);
+    }
+
+    /**
+     * @param {IPlugin} plugin
+     */
+    registerPlugin(plugin) {
+        this._assertImplements(plugin, ['register', 'stop'], `Plugin`);
+        if (typeof plugin.inputEvent !== 'string' || typeof plugin.outputEvent !== 'string') {
+            throw new Error(`[ExtensionRegistry] Plugin must declare string inputEvent and outputEvent getters.`);
+        }
+        if (this.plugins.length > 0) {
+            const prev = this.plugins[this.plugins.length - 1];
+            if (plugin.inputEvent !== prev.outputEvent) {
+                console.warn(
+                    `[ExtensionRegistry] Plugin chain gap: previous plugin outputs '${prev.outputEvent}' ` +
+                    `but new plugin subscribes to '${plugin.inputEvent}'. ` +
+                    `This may be intentional (parallel plugins) or a misconfiguration.`
+                );
+            }
+        }
+        this.plugins.push(plugin);
     }
 
     getAdapter(name) { return this.adapters.get(name); }
@@ -88,6 +110,7 @@ export class ExtensionRegistry {
     getStorage() { return this.storagePlugin; }
     getAgentRegistry() { return this.agentRegistry; }
     getAllCommands() { return Array.from(this.commands); }
+    getAllPlugins() { return [...this.plugins]; }
 }
 
 export const defaultExtensionRegistry = new ExtensionRegistry();
