@@ -21,15 +21,14 @@ Bark is a lightweight, framework-agnostic AI agent orchestration engine. It prov
 - `@bark/driver-claude-code` - Integration with Anthropic's Claude CLI.
 - `@bark/driver-gemini` - Integration with Google's Gemini CLI.
 - `@bark/driver-opencode` - Integration with the OpenCode CLI.
+- `@bark/driver-cursor` - Integration with the Cursor CLI.
 
 ### Storage
 - `@bark/storage-memory` - In-memory ephemeral session state.
 - `@bark/storage-jsonl` - Persistent JSONL file-based session storage.
 
-### Commands & Interceptors
-- `@bark/command-ping` - Simple `/ping` response interceptor.
-- `@bark/command-driver` - Chat-based dynamic driver switching (e.g. `/driver claude`).
-- `@bark/command-agents` - Agent management commands (`/new`, `/restart`).
+### Commands
+- `@bark/commands-core` - Built-in commands: `/ping`, `/switch`, `/new`, `/delete`, `/list`, `/restart`, `/stop`, `/compact`.
 
 ## Quick Start
 
@@ -60,4 +59,4 @@ bark.start();
 ```
 
 ## Contributing
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our open source workflow.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for design details and extension guidelines.
