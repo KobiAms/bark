@@ -1,17 +1,19 @@
 import { IAdapter, IDriver, IStorage, IAgentRegistry, ICommand, IPlugin } from '../interfaces/index.js';
+import { defaultLogger } from '../logger/index.js';
 
 /**
  * Manages all registered Extensions for the Bark core.
  * Extentsion include Adapters, Drivers, Storage Plugins, and Commands.
  */
 export class ExtensionRegistry {
-    constructor() {
+    constructor(logger = defaultLogger) {
         this.adapters = new Map();   // name -> IAdapter
         this.drivers = new Map();    // name -> IDriver
         this.commands = new Set();   // ICommand[]
         this.plugins = [];           // IPlugin[] ordered by registration
         this.storagePlugin = null;   // IStorage
         this.agentRegistry = null;   // IAgentRegistry
+        this.logger = logger;
     }
 
     _assertImplements(instance, methods, name) {
@@ -55,7 +57,7 @@ export class ExtensionRegistry {
         this._assertImplements(storage, ['getSession', 'saveSession', 'deleteSession', 'deleteSessionsByPrefix'], `Storage plugin`);
 
         if (this.storagePlugin) {
-            console.warn(`[ExtensionRegistry] Overwriting existing Storage plugin.`);
+            this.logger.warn(`[ExtensionRegistry] Overwriting existing Storage plugin.`);
         }
         this.storagePlugin = storage;
     }
@@ -67,7 +69,7 @@ export class ExtensionRegistry {
         this._assertImplements(registry, ['getAgent', 'saveAgent', 'deleteAgent', 'listAgents'], `Agent registry`);
 
         if (this.agentRegistry) {
-            console.warn(`[ExtensionRegistry] Overwriting existing Agent registry.`);
+            this.logger.warn(`[ExtensionRegistry] Overwriting existing Agent registry.`);
         }
         this.agentRegistry = registry;
     }
@@ -91,7 +93,7 @@ export class ExtensionRegistry {
         if (this.plugins.length > 0) {
             const prev = this.plugins[this.plugins.length - 1];
             if (plugin.inputEvent !== prev.outputEvent) {
-                console.warn(
+                this.logger.warn(
                     `[ExtensionRegistry] Plugin chain gap: previous plugin outputs '${prev.outputEvent}' ` +
                     `but new plugin subscribes to '${plugin.inputEvent}'. ` +
                     `This may be intentional (parallel plugins) or a misconfiguration.`

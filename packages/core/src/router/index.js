@@ -1,4 +1,5 @@
 import { EventTypes } from '../interfaces/index.js';
+import { defaultLogger } from '../logger/index.js';
 
 const DRIVER_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -7,9 +8,10 @@ export class MessageRouter {
      * @param {import('../bus/index.js').EventBus} eventBus
      * @param {import('../registry/index.js').ExtensionRegistry} registry
      */
-    constructor(eventBus, registry) {
+    constructor(eventBus, registry, logger = defaultLogger) {
         this.eventBus = eventBus;
         this.registry = registry;
+        this.logger = logger;
         this.defaultDriverName = null;
 
         // Maps sessionId -> { adapterName, replyTo?, lastMessageId? }
@@ -105,7 +107,7 @@ export class MessageRouter {
         const r = this._getAdapterAndReplyTo(sessionId);
         if (!r?.adapter) return;
         await r.adapter.sendMessage(r.replyTo, text, { replyToMessageId: r.lastMessageId }).catch(err =>
-            console.error(`[MessageRouter] Failed to reply to session '${sessionId}':`, err)
+            this.logger.error(`[MessageRouter] Failed to reply to session '${sessionId}':`, err)
         );
     }
 
@@ -272,7 +274,7 @@ async handleMediaIndicator(event) {
         const r = this._getAdapterAndReplyTo(event.sessionId);
         if (!r?.adapter) return;
         r.adapter.sendChunk(r.replyTo, event.chunk).catch(err =>
-            console.error(`[MessageRouter] Failed to route sendChunk to adapter '${r.adapterName}':`, err)
+            this.logger.error(`[MessageRouter] Failed to route sendChunk to adapter '${r.adapterName}':`, err)
         );
     }
 
@@ -384,7 +386,7 @@ async handleMediaIndicator(event) {
         const storage = this.registry.getStorage();
 
         if (!storage) {
-            console.error('[MessageRouter] No storage plugin registered. Cannot process message.');
+            this.logger.error('[MessageRouter] No storage plugin registered. Cannot process message.');
             this.eventBus.publish({ type: EventTypes.ERROR_OCCURRED, sessionId, error: new Error('No storage plugin') });
             return;
         }
@@ -456,7 +458,7 @@ async handleMediaIndicator(event) {
 
             const driver = this.registry.getDriver(session.driverName);
             if (!driver) {
-                console.error(`[MessageRouter] Driver '${session.driverName}' not found.`);
+                this.logger.error(`[MessageRouter] Driver '${session.driverName}' not found.`);
                 await this._replyToSender(sessionId, `❌ Driver '${session.driverName}' not found.`);
                 return;
             }
@@ -519,13 +521,13 @@ async handleMediaIndicator(event) {
                 if (driverError.isTimeout) {
                     await driver.kill(effectiveSessionId).catch(() => {});
                 } else {
-                    console.error(`[MessageRouter] Driver error for session ${effectiveSessionId}:`, driverError);
+                    this.logger.error(`[MessageRouter] Driver error for session ${effectiveSessionId}:`, driverError);
                 }
                 await this._editOrSend(effectiveSessionId, `❌ ${driverError.message}`);
             }
 
         } catch (error) {
-            console.error(`[MessageRouter] Error processing message for session ${sessionId}:`, error);
+            this.logger.error(`[MessageRouter] Error processing message for session ${sessionId}:`, error);
             this.eventBus.publish({ type: EventTypes.ERROR_OCCURRED, sessionId, error });
             await this._replyToSender(sessionId, `❌ ${error.message}`);
         }

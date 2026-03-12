@@ -36,28 +36,28 @@ export class TelegramAdapter extends IAdapter {
         if (!this.allowedUserIds) throw new Error('[TelegramAdapter] allowedUserIds is required. Set TELEGRAM_ALLOWED_USER_IDS in your env file. Get your user ID from @userinfobot on Telegram.');
         
         if (this.token === 'mock') {
-            console.log('[TelegramAdapter] Running in MOCK mode. Bypassing API validation.');
+            this.logger.log('[TelegramAdapter] Running in MOCK mode. Bypassing API validation.');
             this.botInfo = { username: 'mock_bot', id: 12345 };
             return;
         }
 
         const me = await this._api('getMe', {});
         this.botInfo = me;
-        console.log(`[TelegramAdapter] Bot connected: @${me.username}`);
+        this.logger.log(`[TelegramAdapter] Bot connected: @${me.username}`);
 
         if (!this.chatId) {
             this.chatId = this._loadChatId(me.id) || null;
         }
 
         if (this.chatId) {
-            console.log(`[TelegramAdapter] Listening strictly to chat: ${this.chatId}`);
+            this.logger.log(`[TelegramAdapter] Listening strictly to chat: ${this.chatId}`);
         } else {
-            console.log(`[TelegramAdapter] Waiting for first message to lock onto a chat ID...`);
+            this.logger.log(`[TelegramAdapter] Waiting for first message to lock onto a chat ID...`);
         }
 
         this.polling = true;
         this._pollLoop().catch(err => {
-            console.error('[TelegramAdapter] Polling loop crashed', err);
+            this.logger.error('[TelegramAdapter] Polling loop crashed', err);
             if (this.errorCb) this.errorCb(err);
         });
     }
@@ -65,7 +65,7 @@ export class TelegramAdapter extends IAdapter {
     async stop() {
         this.polling = false;
         if (this.pollTimeout) clearTimeout(this.pollTimeout);
-        console.log('[TelegramAdapter] Stopped.');
+        this.logger.log('[TelegramAdapter] Stopped.');
     }
 
     async sendMessage(sessionId, payload, metadata = {}) {
@@ -94,7 +94,7 @@ export class TelegramAdapter extends IAdapter {
                 const result = await this._api('sendMessage', body);
                 return { messageId: String(result.message_id) };
             } catch (err2) {
-                console.error('[TelegramAdapter] Send failed:', err2.message);
+                this.logger.error('[TelegramAdapter] Send failed:', err2.message);
             }
         }
     }
@@ -144,11 +144,11 @@ export class TelegramAdapter extends IAdapter {
         try {
             const data = JSON.parse(readFileSync(this.stateFile, 'utf8'));
             if (!data.botId || data.botId !== botId) {
-                console.log(`[TelegramAdapter] Bot changed or unverified state — discarding saved chatId.`);
+                this.logger.log(`[TelegramAdapter] Bot changed or unverified state — discarding saved chatId.`);
                 return null;
             }
             if (data.chatId) {
-                console.log(`[TelegramAdapter] Restored chatId from state: ${data.chatId}`);
+                this.logger.log(`[TelegramAdapter] Restored chatId from state: ${data.chatId}`);
                 return data.chatId;
             }
         } catch { /* file doesn't exist yet */ }
@@ -161,7 +161,7 @@ export class TelegramAdapter extends IAdapter {
             mkdirSync(dirname(this.stateFile), { recursive: true });
             writeFileSync(this.stateFile, JSON.stringify({ botId: this.botInfo?.id, chatId }), 'utf8');
         } catch (err) {
-            console.error('[TelegramAdapter] Failed to save state:', err.message);
+            this.logger.error('[TelegramAdapter] Failed to save state:', err.message);
         }
     }
 
@@ -208,7 +208,7 @@ export class TelegramAdapter extends IAdapter {
                     if (!this.chatId) {
                         this.chatId = String(msg.chat.id);
                         this._saveChatId(this.chatId);
-                        console.log(`[TelegramAdapter] Auto-locked to chat: ${this.chatId}`);
+                        this.logger.log(`[TelegramAdapter] Auto-locked to chat: ${this.chatId}`);
                     }
 
                     // Strict chat routing
@@ -230,11 +230,11 @@ export class TelegramAdapter extends IAdapter {
                         
                         if (voice) {
                             try {
-                                console.log(`[TelegramAdapter] Downloading voice message (${voice.file_id})...`);
+                                this.logger.log(`[TelegramAdapter] Downloading voice message (${voice.file_id})...`);
                                 const filePath = await this._downloadFile(voice.file_id);
                                 payload = { type: 'audio', filePath };
                             } catch (err) {
-                                console.error(`[TelegramAdapter] Failed to download voice: ${err.message}`);
+                                this.logger.error(`[TelegramAdapter] Failed to download voice: ${err.message}`);
                                 continue; // Skip this message if we can't get the audio
                             }
                         }
@@ -263,7 +263,7 @@ export class TelegramAdapter extends IAdapter {
             } catch (err) {
                 if (!this.polling) break;
                 this.consecutiveErrors++;
-                console.error(`[TelegramAdapter] Poll Error: ${err.message}`);
+                this.logger.error(`[TelegramAdapter] Poll Error: ${err.message}`);
                 await new Promise(r => { this.pollTimeout = setTimeout(r, Math.min(5000 * this.consecutiveErrors, 30000)); });
             }
         }

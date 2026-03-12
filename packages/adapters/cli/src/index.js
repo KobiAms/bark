@@ -32,14 +32,14 @@ export class CLIAdapter extends IAdapter {
             }
         });
 
-        console.log('[CLIAdapter] Started.');
+        this.logger.log('[CLIAdapter] Started.');
     }
 
     async stop() {
         if (this.rl) {
             this.rl.close();
         }
-        console.log('[CLIAdapter] Stopped.');
+        this.logger.log('[CLIAdapter] Stopped.');
     }
 
     async sendChunk(sessionId, chunk) {
@@ -48,7 +48,7 @@ export class CLIAdapter extends IAdapter {
 
     async sendMessage(sessionId, payload) {
         // Called when a response is fully complete — re-show the prompt
-        console.log();
+        this.logger.log();
         if (this.rl) this.rl.prompt();
     }
 

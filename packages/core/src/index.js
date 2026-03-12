@@ -2,6 +2,7 @@ export * from './interfaces/index.js';
 export { EventBus, defaultEventBus } from './bus/index.js';
 export { ExtensionRegistry, defaultExtensionRegistry } from './registry/index.js';
 export { MessageRouter } from './router/index.js';
+export { ConsoleLogger, SilentLogger } from './logger/index.js';
 
 /**
  * Bark Core Application class.
@@ -12,13 +13,15 @@ import { ExtensionRegistry } from './registry/index.js';
 import { MessageRouter } from './router/index.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { EventTypes } from './interfaces/index.js';
+import { ConsoleLogger } from './logger/index.js';
 
 export class BarkCore {
     constructor() {
         this.eventBus = new EventBus();
-        this.registry = new ExtensionRegistry();
-        this.router = new MessageRouter(this.eventBus, this.registry);
-        this.lifecycle = new LifecycleManager(this.eventBus, this.registry, this.router);
+        this.logger = new ConsoleLogger();
+        this.registry = new ExtensionRegistry(this.logger);
+        this.router = new MessageRouter(this.eventBus, this.registry, this.logger);
+        this.lifecycle = new LifecycleManager(this.eventBus, this.registry, this.router, this.logger);
     }
 
     /**
@@ -28,11 +31,12 @@ export class BarkCore {
      */
     useAdapter(name, adapter) {
         this.registry.registerAdapter(name, adapter);
-        
+        adapter.setLogger(this.logger);
+
         // Wire adapter events to the bus, stamping adapterName so the router knows where to reply
         adapter.onMessage((barkEvent) => this.eventBus.publish({ adapterName: name, ...barkEvent }));
-        adapter.onError((error) => console.error(`[Adapter Error: ${name}]`, error));
-        
+        adapter.onError((error) => this.logger.error(`[Adapter Error: ${name}]`, error));
+
         return this;
     }
 
@@ -43,7 +47,8 @@ export class BarkCore {
      */
     useDriver(name, driver) {
         this.registry.registerDriver(name, driver);
-        
+        driver.setLogger(this.logger);
+
         // Wire driver events to the bus
         driver.onStream((streamEvent) => {
             this.eventBus.publish({ type: EventTypes.STREAM_CHUNK, ...streamEvent });
@@ -53,7 +58,7 @@ export class BarkCore {
             this.eventBus.publish({ type: EventTypes.STREAM_PROGRESS, ...progressEvent });
         });
 
-        driver.onError((error) => console.error(`[Driver Error: ${name}]`, error));
+        driver.onError((error) => this.logger.error(`[Driver Error: ${name}]`, error));
         driver.onComplete((compEvent) => {
             this.eventBus.publish({ type: EventTypes.DRIVER_COMPLETE, ...compEvent });
         });
@@ -67,6 +72,7 @@ export class BarkCore {
      */
     useStorage(storage) {
         this.registry.registerStorage(storage);
+        storage.setLogger(this.logger);
         return this;
     }
 
@@ -76,6 +82,7 @@ export class BarkCore {
      */
     useAgentRegistry(registry) {
         this.registry.registerAgentRegistry(registry);
+        registry.setLogger(this.logger);
         return this;
     }
 
@@ -85,6 +92,7 @@ export class BarkCore {
      */
     useCommand(command) {
         this.registry.registerCommand(command);
+        command.setLogger(this.logger);
         return this;
     }
 
@@ -96,6 +104,12 @@ export class BarkCore {
      */
     usePlugin(plugin) {
         this.registry.registerPlugin(plugin);
+        plugin.setLogger(this.logger);
+        return this;
+    }
+
+    useLogger(logger) {
+        this.logger = logger;
         return this;
     }
 

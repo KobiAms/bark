@@ -27,7 +27,7 @@ export class GeminiDriver extends IDriver {
     }
 
     async spawn(config = {}) {
-        console.log('[GeminiDriver] Ready to spawn sessions on demand.');
+        this.logger.log('[GeminiDriver] Ready to spawn sessions on demand.');
     }
 
     async sendCommand(sessionId, prompt, systemPrompt = null, model, driverState = {}) {
@@ -54,7 +54,7 @@ export class GeminiDriver extends IDriver {
         args.push('--prompt', fullPrompt);
 
         return new Promise((resolve, reject) => {
-            console.log(`[GeminiDriver] Executing gemini for session ${sessionId}...`);
+            this.logger.log(`[GeminiDriver] Executing gemini for session ${sessionId}...`);
 
             const child = spawn('gemini', args, {
                 cwd: this.cwd,
@@ -159,7 +159,7 @@ export class GeminiDriver extends IDriver {
                 }
 
                 if (code !== 0 && code !== null) {
-                    console.error(`[GeminiDriver] Process exited with code ${code}: ${errorBuffer}`);
+                    this.logger.error(`[GeminiDriver] Process exited with code ${code}: ${errorBuffer}`);
                     if (this.errorCb) this.errorCb({ sessionId, error: new Error(`Exit ${code}: ${errorBuffer}`) });
                     reject(new Error(`Exit ${code}`));
                     return;
@@ -171,7 +171,7 @@ export class GeminiDriver extends IDriver {
 
             child.on('error', (err) => {
                 this.activeSessions.delete(sessionId);
-                console.error(`[GeminiDriver] Spawn error:`, err);
+                this.logger.error(`[GeminiDriver] Spawn error:`, err);
                 if (this.errorCb) this.errorCb({ sessionId, error: err });
                 reject(err);
             });
@@ -188,7 +188,7 @@ export class GeminiDriver extends IDriver {
     }
 
     async stop() {
-        console.log(`[GeminiDriver] Stopping all ${this.activeSessions.size} active sessions...`);
+        this.logger.log(`[GeminiDriver] Stopping all ${this.activeSessions.size} active sessions...`);
         for (const child of this.activeSessions.values()) child.kill('SIGKILL');
         this.activeSessions.clear();
     }

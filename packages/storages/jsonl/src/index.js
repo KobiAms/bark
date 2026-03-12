@@ -50,7 +50,7 @@ export class JsonlStorage extends IStorage {
                     this.sessions.set(entry.sessionId, entry.state);
                 }
             } catch (err) {
-                console.warn(`[JsonlStorage] Failed to parse line: ${err.message}`);
+                this.logger.warn(`[JsonlStorage] Failed to parse line: ${err.message}`);
             }
         }
         this.initialized = true;
@@ -90,7 +90,7 @@ export class JsonlStorage extends IStorage {
             lines.push(JSON.stringify({ sessionId, state, timestamp: Date.now() }));
         }
         await fsPromises.writeFile(this.filePath, lines.join('\n') + (lines.length > 0 ? '\n' : ''));
-        console.log(`[JsonlStorage] Compacted: ${lines.length} active sessions`);
+        this.logger.log(`[JsonlStorage] Compacted: ${lines.length} active sessions`);
     }
 }
 
@@ -133,7 +133,7 @@ export class JsonlAgentRegistry extends IAgentRegistry {
                     this.agents.set(entry.name, entry.config);
                 }
             } catch (err) {
-                console.warn(`[JsonlAgentRegistry] Failed to parse line: ${err.message}`);
+                this.logger.warn(`[JsonlAgentRegistry] Failed to parse line: ${err.message}`);
             }
         }
         this.initialized = true;
@@ -172,6 +172,6 @@ export class JsonlAgentRegistry extends IAgentRegistry {
             lines.push(JSON.stringify({ name, config, timestamp: Date.now() }));
         }
         await fsPromises.writeFile(this.filePath, lines.join('\n') + (lines.length > 0 ? '\n' : ''));
-        console.log(`[JsonlAgentRegistry] Compacted: ${lines.length} agents`);
+        this.logger.log(`[JsonlAgentRegistry] Compacted: ${lines.length} agents`);
     }
 }

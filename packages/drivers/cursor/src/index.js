@@ -44,10 +44,10 @@ export class CursorDriver extends IDriver {
                 .map(l => l.split(' - ')[0].trim().replace(/\(current\)/, '').trim())
                 .filter(Boolean);
         } catch (err) {
-            console.warn('[CursorDriver] Failed to fetch models from `agent models` CLI:', err.message);
+            this.logger.warn('[CursorDriver] Failed to fetch models from `agent models` CLI:', err.message);
             this._models = ['sonnet-4.5-thinking', 'sonnet-4-20250514', 'claude-opus-4-1', 'claude-opus-4-20250805'];
         }
-        console.log('[CursorDriver] Ready to spawn sessions on demand.');
+        this.logger.log('[CursorDriver] Ready to spawn sessions on demand.');
     }
 
     async sendCommand(sessionId, prompt, systemPrompt = null, model, driverState = {}) {
@@ -84,7 +84,7 @@ export class CursorDriver extends IDriver {
         }
 
         return new Promise((resolve, reject) => {
-            console.log(`[CursorDriver] Executing agent for session ${sessionId}${nativeSessionId ? ` (resume: ${nativeSessionId})` : ''}...`);
+            this.logger.log(`[CursorDriver] Executing agent for session ${sessionId}${nativeSessionId ? ` (resume: ${nativeSessionId})` : ''}...`);
 
             const child = spawn('agent', args, {
                 env: { ...process.env },
@@ -167,7 +167,7 @@ export class CursorDriver extends IDriver {
                 }
 
                 if (code !== 0 && code !== null) {
-                    console.error(`[CursorDriver] Process exited with code ${code}: ${errorBuffer}`);
+                    this.logger.error(`[CursorDriver] Process exited with code ${code}: ${errorBuffer}`);
                     if (this.errorCb) this.errorCb({ sessionId, error: new Error(`Exit ${code}: ${errorBuffer}`) });
                     reject(new Error(`Exit ${code}`));
                     return;
@@ -179,7 +179,7 @@ export class CursorDriver extends IDriver {
 
             child.on('error', (err) => {
                 this.activeSessions.delete(sessionId);
-                console.error(`[CursorDriver] Spawn error:`, err);
+                this.logger.error(`[CursorDriver] Spawn error:`, err);
                 if (this.errorCb) this.errorCb({ sessionId, error: err });
                 reject(err);
             });
@@ -196,7 +196,7 @@ export class CursorDriver extends IDriver {
     }
 
     async stop() {
-        console.log(`[CursorDriver] Stopping all ${this.activeSessions.size} active sessions...`);
+        this.logger.log(`[CursorDriver] Stopping all ${this.activeSessions.size} active sessions...`);
         for (const child of this.activeSessions.values()) child.kill('SIGKILL');
         this.activeSessions.clear();
     }

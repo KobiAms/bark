@@ -33,7 +33,7 @@ export class OpenCodeDriver extends IDriver {
         } catch {
             this._models = [];
         }
-        console.log('[OpenCodeDriver] Ready to spawn sessions on demand.');
+        this.logger.log('[OpenCodeDriver] Ready to spawn sessions on demand.');
     }
 
     async sendCommand(sessionId, prompt, systemPrompt = null, model, driverState = {}) {
@@ -62,7 +62,7 @@ export class OpenCodeDriver extends IDriver {
         args.push(fullPrompt);
 
         return new Promise((resolve, reject) => {
-            console.log(`[OpenCodeDriver] Executing opencode for session ${sessionId}${nativeSessionId ? ` (resume: ${nativeSessionId})` : ''}...`);
+            this.logger.log(`[OpenCodeDriver] Executing opencode for session ${sessionId}${nativeSessionId ? ` (resume: ${nativeSessionId})` : ''}...`);
 
             const child = spawn('opencode', args, {
                 cwd: this.cwd,
@@ -147,7 +147,7 @@ export class OpenCodeDriver extends IDriver {
                 }
 
                 if (code !== 0 && code !== null) {
-                    console.error(`[OpenCodeDriver] Process exited with code ${code}: ${errorBuffer}`);
+                    this.logger.error(`[OpenCodeDriver] Process exited with code ${code}: ${errorBuffer}`);
                     if (this.errorCb) this.errorCb({ sessionId, error: new Error(`Exit ${code}: ${errorBuffer}`) });
                     reject(new Error(`Exit ${code}`));
                     return;
@@ -159,7 +159,7 @@ export class OpenCodeDriver extends IDriver {
 
             child.on('error', (err) => {
                 this.activeSessions.delete(sessionId);
-                console.error(`[OpenCodeDriver] Spawn error:`, err);
+                this.logger.error(`[OpenCodeDriver] Spawn error:`, err);
                 if (this.errorCb) this.errorCb({ sessionId, error: err });
                 reject(err);
             });
@@ -176,7 +176,7 @@ export class OpenCodeDriver extends IDriver {
     }
 
     async stop() {
-        console.log(`[OpenCodeDriver] Stopping all ${this.activeSessions.size} active sessions...`);
+        this.logger.log(`[OpenCodeDriver] Stopping all ${this.activeSessions.size} active sessions...`);
         for (const child of this.activeSessions.values()) child.kill('SIGKILL');
         this.activeSessions.clear();
     }

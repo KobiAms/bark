@@ -58,7 +58,7 @@ export class HelpCommand extends ICommand {
                         lines.push(`  \`${driverName}\`: (no models)`);
                     }
                 } catch (err) {
-                    console.error(`[HelpCommand] Error getting models for driver ${driverName}:`, err);
+                    this.logger.error(`[HelpCommand] Error getting models for driver ${driverName}:`, err);
                     lines.push(`  \`${driverName}\`: (error loading models)`);
                 }
             }
@@ -66,7 +66,7 @@ export class HelpCommand extends ICommand {
 
             eventBus.publish({ type: 'command.complete', sessionId, result: lines.join('\n') });
         } catch (err) {
-            console.error('[HelpCommand] Error:', err);
+            this.logger.error('[HelpCommand] Error:', err);
             eventBus.publish({ type: 'command.complete', sessionId, result: '❌ Error generating help: ' + err.message });
         }
     }

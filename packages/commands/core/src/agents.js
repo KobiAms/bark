@@ -115,7 +115,7 @@ export class ListAgentsCommand extends ICommand {
             eventBus.publish({ type: 'stream.chunk', sessionId, chunk: msg });
             eventBus.publish({ type: 'command.complete', sessionId, result: msg });
         } catch (err) {
-            console.error('[ListAgentsCommand] Error:', err);
+            this.logger.error('[ListAgentsCommand] Error:', err);
             eventBus.publish({ type: 'command.complete', sessionId, result: '❌ Error listing agents: ' + err.message });
         }
     }

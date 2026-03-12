@@ -49,7 +49,7 @@ export class WhatsAppAdapter extends IAdapter {
 
     async start() {
         if (this.groupName === 'mock') {
-            console.log('[WhatsAppAdapter] Running in MOCK mode. Bypassing Chromium download.');
+            this.logger.log('[WhatsAppAdapter] Running in MOCK mode. Bypassing Chromium download.');
             this.waState = 'connected';
             this.groupChat = { name: 'mock' };
             return;
@@ -75,48 +75,48 @@ export class WhatsAppAdapter extends IAdapter {
 
         this.client.on('qr', (qr) => {
             this.waState = 'waiting_qr';
-            console.log('\n[WhatsAppAdapter] QR Code received. Please scan to authenticate.');
+            this.logger.log('\n[WhatsAppAdapter] QR Code received. Please scan to authenticate.');
             // We could emit a special BarkEvent for QR codes, but for now we just stdout the raw data
             import('qrcode-terminal').then(module => {
                 module.default.generate(qr, { small: true });
-            }).catch(e => console.error('[WhatsAppAdapter] Could not load qrcode-terminal', e));
+            }).catch(e => this.logger.error('[WhatsAppAdapter] Could not load qrcode-terminal', e));
         });
 
         this.client.on('authenticated', () => {
-            console.log('[WhatsAppAdapter] Authenticated');
+            this.logger.log('[WhatsAppAdapter] Authenticated');
             this.waState = 'authenticating';
             this.latestQrDataUrl = null;
         });
 
         this.client.on('auth_failure', (msg) => {
-            console.error(`[WhatsAppAdapter] Auth failed: ${msg}`);
+            this.logger.error(`[WhatsAppAdapter] Auth failed: ${msg}`);
             this.waState = 'disconnected';
             if (this.errorCb) this.errorCb({ error: new Error(`WhatsApp Auth Blocked: ${msg}`) });
         });
 
         this.client.on('disconnected', (reason) => {
-            console.log('[WhatsAppAdapter] Disconnected:', reason);
+            this.logger.log('[WhatsAppAdapter] Disconnected:', reason);
             this.waState = 'disconnected';
             this.groupChat = null;
 
             // Attempt automatic reconnection
             if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.reconnectAttempts++;
-                console.log(`[WhatsAppAdapter] Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms...`);
+                this.logger.log(`[WhatsAppAdapter] Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms...`);
                 setTimeout(() => {
-                    console.log('[WhatsAppAdapter] Attempting to reconnect...');
+                    this.logger.log('[WhatsAppAdapter] Attempting to reconnect...');
                     this.client.initialize().catch(e => {
-                        console.error('[WhatsAppAdapter] Reconnection failed:', e.message);
+                        this.logger.error('[WhatsAppAdapter] Reconnection failed:', e.message);
                     });
                 }, this.reconnectDelay);
             } else {
-                console.error('[WhatsAppAdapter] Max reconnection attempts reached. Manual intervention may be needed.');
+                this.logger.error('[WhatsAppAdapter] Max reconnection attempts reached. Manual intervention may be needed.');
             }
         });
 
         // Catch unhandled client errors to prevent process crash
         this.client.on('error', (error) => {
-            console.error('[WhatsAppAdapter] Client error:', error);
+            this.logger.error('[WhatsAppAdapter] Client error:', error);
             this.waState = 'disconnected';
             if (this.errorCb) this.errorCb({ error });
         });
@@ -126,7 +126,7 @@ export class WhatsAppAdapter extends IAdapter {
             const timeout = setTimeout(() => {
                 if (!settled) {
                     settled = true;
-                    console.log('[WhatsAppAdapter] Init timed out — continuing');
+                    this.logger.log('[WhatsAppAdapter] Init timed out — continuing');
                     resolve();
                 }
             }, INIT_TIMEOUT_MS);
@@ -134,7 +134,7 @@ export class WhatsAppAdapter extends IAdapter {
             this.client.on('ready', async () => {
                 settled = true;
                 clearTimeout(timeout);
-                console.log('[WhatsAppAdapter] Client ready');
+                this.logger.log('[WhatsAppAdapter] Client ready');
                 this.reconnectAttempts = 0; // Reset reconnection counter on successful connect
 
                 const chats = await this.client.getChats();
@@ -142,10 +142,10 @@ export class WhatsAppAdapter extends IAdapter {
 
                 if (this.groupChat) {
                     this.waState = 'connected';
-                    console.log(`[WhatsAppAdapter] Listening on group: "${this.groupChat.name}"`);
+                    this.logger.log(`[WhatsAppAdapter] Listening on group: "${this.groupChat.name}"`);
                 } else {
-                    console.warn(`[WhatsAppAdapter] Group "${this.groupName}" not found.`);
-                    chats.filter(c => c.isGroup).forEach(c => console.log(`  - ${c.name}`));
+                    this.logger.warn(`[WhatsAppAdapter] Group "${this.groupName}" not found.`);
+                    chats.filter(c => c.isGroup).forEach(c => this.logger.log(`  - ${c.name}`));
                 }
 
                 // Wire up inbound message handler
@@ -159,7 +159,7 @@ export class WhatsAppAdapter extends IAdapter {
 
             clearChromiumLocks('.wwebjs_auth');
             this.client.initialize().catch(e => {
-                console.error(`[WhatsAppAdapter] Initialization failure:`, e);
+                this.logger.error(`[WhatsAppAdapter] Initialization failure:`, e);
                 this.waState = 'disconnected';
                 if (!settled) {
                     settled = true;
@@ -189,7 +189,7 @@ export class WhatsAppAdapter extends IAdapter {
                     };
                 }
             } catch (err) {
-                console.warn(`[WhatsAppAdapter] Failed to fetch quoted message data: ${err.message}`);
+                this.logger.warn(`[WhatsAppAdapter] Failed to fetch quoted message data: ${err.message}`);
             }
         }
 
@@ -201,7 +201,7 @@ export class WhatsAppAdapter extends IAdapter {
 
         if (hasMedia && msg.type === 'ptt' || msg.type === 'audio') {
             try {
-                console.log(`[WhatsAppAdapter] Downloading audio message...`);
+                this.logger.log(`[WhatsAppAdapter] Downloading audio message...`);
                 const media = await msg.downloadMedia();
                 if (media && media.data) {
                     const workDir = mkdtempSync(join(tmpdir(), 'bark-wa-audio-'));
@@ -212,7 +212,7 @@ export class WhatsAppAdapter extends IAdapter {
                     payload = { type: 'audio', filePath };
                 }
             } catch (err) {
-                console.error(`[WhatsAppAdapter] Failed to download audio: ${err.message}`);
+                this.logger.error(`[WhatsAppAdapter] Failed to download audio: ${err.message}`);
                 // fallback to plain empty body if download fails
             }
         }
@@ -262,14 +262,14 @@ export class WhatsAppAdapter extends IAdapter {
             try {
                 msg = await this.client.getMessageById(messageId);
             } catch {
-                console.warn('[WhatsAppAdapter] editMessage: message not found:', messageId);
+                this.logger.warn('[WhatsAppAdapter] editMessage: message not found:', messageId);
                 return;
             }
         }
         try {
             await msg.edit(text);
         } catch (err) {
-            console.error('[WhatsAppAdapter] Edit failed:', err.message);
+            this.logger.error('[WhatsAppAdapter] Edit failed:', err.message);
         }
     }
 

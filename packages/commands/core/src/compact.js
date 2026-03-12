@@ -24,7 +24,7 @@ export class CompactCommand extends ICommand {
                 await storage.compact();
                 compacted++;
             } catch (e) {
-                console.error('[CompactCommand] Failed to compact storage:', e);
+                this.logger.error('[CompactCommand] Failed to compact storage:', e);
             }
         }
 
@@ -33,7 +33,7 @@ export class CompactCommand extends ICommand {
                 await agentRegistry.compact();
                 compacted++;
             } catch (e) {
-                console.error('[CompactCommand] Failed to compact agent registry:', e);
+                this.logger.error('[CompactCommand] Failed to compact agent registry:', e);
             }
         }
 

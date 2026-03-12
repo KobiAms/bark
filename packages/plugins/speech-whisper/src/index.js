@@ -46,7 +46,7 @@ export class WhisperPlugin extends IPlugin {
                 const text = await this._toText(event.payload);
                 eventBus.publish({ ...event, type: this.outputEvent, payload: text });
             } catch (err) {
-                console.error('[WhisperPlugin] Transcription failed:', err.message);
+                this.logger.error('[WhisperPlugin] Transcription failed:', err.message);
                 // Forward the event so the pipeline never stalls
                 const fallback = typeof event.payload === 'string'
                     ? event.payload
@@ -54,7 +54,7 @@ export class WhisperPlugin extends IPlugin {
                 eventBus.publish({ ...event, type: this.outputEvent, payload: fallback });
             }
         });
-        console.log('[WhisperPlugin] Registered — listening for audio payloads.');
+        this.logger.log('[WhisperPlugin] Registered — listening for audio payloads.');
     }
 
     async stop() {

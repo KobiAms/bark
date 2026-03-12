@@ -47,7 +47,7 @@ export class ClaudeCodeDriver extends IDriver {
             await this._execClaude(sessionId, nativeSessionId, cmd, true, systemPrompt, model, nativeSessionId);
         } catch (error) {
             if (error.message.includes('No conversation found')) {
-                console.log(`[ClaudeCodeDriver] Session not found. Initializing new session ${sessionId}...`);
+                this.logger.log(`[ClaudeCodeDriver] Session not found. Initializing new session ${sessionId}...`);
                 const freshUuid = randomUUID();
                 await this._execClaude(sessionId, freshUuid, cmd, false, systemPrompt, model, freshUuid);
             } else {
@@ -180,7 +180,7 @@ export class ClaudeCodeDriver extends IDriver {
     async kill(sessionId) {
         const child = this.activeProcesses.get(sessionId);
         if (child) {
-            console.log(`[ClaudeCodeDriver] Killing session ${sessionId}`);
+            this.logger.log(`[ClaudeCodeDriver] Killing session ${sessionId}`);
             this.killedSessions.add(sessionId);
             child.kill('SIGKILL');
             this.activeProcesses.delete(sessionId);
@@ -188,7 +188,7 @@ export class ClaudeCodeDriver extends IDriver {
     }
 
     async stop() {
-        console.log(`[ClaudeCodeDriver] Stopping all ${this.activeProcesses.size} active sessions...`);
+        this.logger.log(`[ClaudeCodeDriver] Stopping all ${this.activeProcesses.size} active sessions...`);
         for (const sessionId of Array.from(this.activeProcesses.keys())) {
             await this.kill(sessionId);
         }

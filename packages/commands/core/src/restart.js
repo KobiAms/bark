@@ -13,7 +13,7 @@ export class RestartCommand extends ICommand {
         const storage_ = registry.getStorage() || storage;
         const adapter = registry.getAdapter(adapterName);
 
-        console.log(`[RestartCommand] Restart requested by session ${sessionId} via adapter ${adapterName}`);
+        this.logger.log(`[RestartCommand] Restart requested by session ${sessionId} via adapter ${adapterName}`);
 
         // Send restart message to the originating adapter and capture messageId
         if (adapter) {
@@ -30,7 +30,7 @@ export class RestartCommand extends ICommand {
         }
 
         setTimeout(async () => {
-            console.log('[RestartCommand] Stopping all drivers and adapters before restart...');
+            this.logger.log('[RestartCommand] Stopping all drivers and adapters before restart...');
             const drivers = registry.getAllDrivers();
             const adapters = registry.getAllAdapters();
             await Promise.all([

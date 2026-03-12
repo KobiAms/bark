@@ -14,7 +14,7 @@ export class EchoDriver extends IDriver {
     }
 
     async spawn(config) {
-        console.log('[EchoDriver] Spawned with config:', config);
+        this.logger.log('[EchoDriver] Spawned with config:', config);
     }
 
     async sendCommand(sessionId, cmd) {
@@ -44,7 +44,7 @@ export class EchoDriver extends IDriver {
     }
 
     async kill(sessionId) {
-        console.log(`[EchoDriver] Killed session ${sessionId}`);
+        this.logger.log(`[EchoDriver] Killed session ${sessionId}`);
         const intervalId = this.activeIntervals.get(sessionId);
         if (intervalId) {
             clearInterval(intervalId);
@@ -53,7 +53,7 @@ export class EchoDriver extends IDriver {
     }
 
     async stop() {
-        console.log(`[EchoDriver] Stopping all ${this.activeIntervals.size} active sessions...`);
+        this.logger.log(`[EchoDriver] Stopping all ${this.activeIntervals.size} active sessions...`);
         for (const sessionId of Array.from(this.activeIntervals.keys())) {
             await this.kill(sessionId);
         }

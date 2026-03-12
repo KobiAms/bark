@@ -1,3 +1,5 @@
+import { defaultLogger } from '../logger/index.js';
+
 /**
  * Represents a normalized event within the Bark orchestration layer.
  *
@@ -30,6 +32,9 @@ class NotImplementedError extends Error {
  * Connects external platforms (e.g. WhatsApp, Telegram) to the Bark Core.
  */
 export class IAdapter {
+    get logger() { return this._logger ?? defaultLogger; }
+    setLogger(logger) { this._logger = logger; }
+
     /**
      * Start the adapter and connect to the underlying platform.
      * @returns {Promise<void>}
@@ -103,6 +108,9 @@ export class IAdapter {
  * Interfaces with a specific AI Agent Runtime (e.g. Claude Code, Gemini).
  */
 export class IDriver {
+    get logger() { return this._logger ?? defaultLogger; }
+    setLogger(logger) { this._logger = logger; }
+
     /**
      * Spawn or warm up a runtime process with the given configuration.
      * @param {Object} config
@@ -173,6 +181,9 @@ export class IDriver {
  * Pluggable state management (e.g. Memory, JSON, SQLite).
  */
 export class IStorage {
+    get logger() { return this._logger ?? defaultLogger; }
+    setLogger(logger) { this._logger = logger; }
+
     /**
      * @param {string} sessionId
      * @returns {Promise<Object>}
@@ -206,6 +217,9 @@ export class IStorage {
  * Handles persistence and lifecycle of defined agents (pups).
  */
 export class IAgentRegistry {
+    get logger() { return this._logger ?? defaultLogger; }
+    setLogger(logger) { this._logger = logger; }
+
     /**
      * @param {string} name
      * @returns {Promise<Object>}
@@ -236,6 +250,9 @@ export class IAgentRegistry {
  * Intercepts specific intents to perform administrative or custom actions.
  */
 export class ICommand {
+    get logger() { return this._logger ?? defaultLogger; }
+    setLogger(logger) { this._logger = logger; }
+
     /**
      * Returns true if this command should handle the incoming message.
      * @param {any} message
@@ -276,6 +293,9 @@ export class ICommand {
  * This preserves sessionId, adapterName, rawId, quotedMessageMetadata, etc.
  */
 export class IPlugin {
+    get logger() { return this._logger ?? defaultLogger; }
+    setLogger(logger) { this._logger = logger; }
+
     /**
      * The event type this plugin subscribes to.
      * @returns {string}
