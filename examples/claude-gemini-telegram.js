@@ -3,7 +3,7 @@ import { ClaudeCodeDriver } from '@bark/driver-claude-code';
 import { GeminiDriver } from '@bark/driver-gemini';
 import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
 import path from 'path';
-import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, CompactCommand } from '@bark/commands-core';
+import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, CompactCommand, ModelsCommand } from '@bark/commands-core';
 import { TelegramAdapter } from '@bark/adapter-telegram';
 import { WhisperPlugin } from '@bark/plugin-speech-whisper';
 
@@ -51,6 +51,7 @@ async function main() {
     bark.useCommand(new DeleteCommand());
     bark.useCommand(new ListAgentsCommand());
     bark.useCommand(new RestartCommand());
+    bark.useCommand(new ModelsCommand());
 
     // Graceful shutdown
     let stopping = false;

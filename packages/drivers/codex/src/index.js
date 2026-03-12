@@ -1,65 +1,72 @@
+import { realpathSync } from 'fs';
+import { execSync, spawn } from 'child_process';
 import { IDriver } from '@bark/core';
-import { spawn, execSync } from 'child_process';
-import { parseLine, buildProgressText } from './parser.js';
+import { buildProgressText, parseLine } from './parser.js';
 
-const DEFAULT_MODELS = ['auto', 'sonnet-4.6', 'sonnet-4.6-thinking', 'opus-4.6', 'opus-4.6-thinking'];
-
-export class CursorDriver extends IDriver {
-    /**
-     * @param {Object} config
-     * @param {string} [config.model] - The model to use (e.g. "sonnet-4.5-thinking")
-     * @param {string} [config.workspace] - Working directory / workspace path
-     * @param {string} [config.mode] - Agent mode: "agent" (default), "plan", or "ask"
-     */
+export class CodexDriver extends IDriver {
     constructor(config = {}) {
         super();
+        this.cwd = config.cwd || process.cwd();
+        this.binary = config.binary || null;
         this.model = config.model || null;
-        this.workspace = config.workspace || process.cwd();
-        this.mode = config.mode || 'agent';
+        this.skipPermissions = config.skipPermissions !== undefined ? config.skipPermissions : true;
 
-        this.activeSessions = new Map();  // barkSessionId -> ChildProcess
+        this.activeSessions = new Map();
         this.killedSessions = new Set();
+        this.sessionThreads = new Map();
 
         this.streamCb = null;
         this.progressCb = null;
         this.errorCb = null;
         this.completeCb = null;
 
-        this._defaultModels = [...DEFAULT_MODELS];
-        this._fetchedModels = [];
+        this._models = [
+            'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2',
+            'gpt-5.1-codex-max', 'gpt-5.1-codex', 'gpt-5-codex',
+            'gpt-5.1-codex-mini', 'gpt-5-codex-mini',
+        ];
     }
 
     getModels() {
-        return [...new Set([...this._defaultModels, ...this._fetchedModels])];
+        return this._models;
     }
 
-    /** Fire-and-forget async model fetch — appends to defaults on success. */
-    _refreshModels() {
+    async spawn() {
         try {
-            // `agent models` outputs lines like "model-id - Display Name"
-            // with ANSI escape codes for the spinner/progress
-            const raw = execSync('agent models', { encoding: 'utf8', timeout: 15000 });
-            // Strip ANSI escape sequences, then extract model ids from "id - name" lines
-            const clean = raw.replace(/\x1b\[[0-9;]*[A-Za-z]|\x1b\[[?0-9;]*[A-Za-z]/g, '');
-            this._fetchedModels = clean.split('\n')
-                .map(l => l.trim())
-                .filter(l => l.includes(' - '))
-                .map(l => l.split(' - ')[0].trim().replace(/\(current\)/, '').replace(/\(default\)/, '').trim())
-                .filter(Boolean);
-            this.logger.log(`[CursorDriver] Fetched ${this._fetchedModels.length} models from CLI.`);
-        } catch (err) {
-            this.logger.warn(`[CursorDriver] Model fetch failed, using defaults: ${err.message}`);
+            this.binary = this.binary || this._resolveBinary();
+        } catch {
+            throw new Error('[CodexDriver] The `codex` CLI is not installed or not in PATH.');
         }
     }
 
-    async spawn(config = {}) {
-        this._refreshModels();
-        this.logger.log('[CursorDriver] Ready to spawn sessions on demand.');
+    _resolveBinary() {
+        const candidates = execSync('which -a codex', { encoding: 'utf8', timeout: 10000 })
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        if (candidates.length === 0) {
+            throw new Error('codex not found');
+        }
+
+        for (const candidate of candidates) {
+            try {
+                const resolved = realpathSync(candidate);
+                if (!resolved.endsWith('.js')) {
+                    return candidate;
+                }
+            } catch {
+                // Ignore broken candidates and continue.
+            }
+        }
+
+        return candidates[0];
     }
 
     async sendCommand(sessionId, prompt, systemPrompt = null, model, driverState = {}) {
         if (this.activeSessions.has(sessionId)) {
-            if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
+            const error = new Error('Agent is already busy');
+            if (this.errorCb) this.errorCb({ sessionId, error });
             return;
         }
 
@@ -68,34 +75,28 @@ export class CursorDriver extends IDriver {
             : prompt;
 
         const activeModel = model || this.model;
-        const args = [
-            '-p', fullPrompt,
-            '--output-format', 'stream-json',
-            '--force',
-            '--trust',
-            '--workspace', this.workspace,
-        ];
+        const nativeSessionId = driverState.nativeSessionId || this.sessionThreads.get(sessionId);
+        const args = nativeSessionId
+            ? ['exec', 'resume', nativeSessionId, '--json']
+            : ['exec', '--json'];
+
+        if (this.skipPermissions) {
+            args.push('--dangerously-bypass-approvals-and-sandbox');
+        }
 
         if (activeModel) {
-            args.push('--model', activeModel);
+            args.push('-m', activeModel);
         }
 
-        if (this.mode && this.mode !== 'agent') {
-            args.push('--mode', this.mode);
-        }
-
-        // Resume existing session if we have one
-        const nativeSessionId = driverState.nativeSessionId;
-        if (nativeSessionId) {
-            args.push('--resume', nativeSessionId);
-        }
+        args.push('-');
 
         return new Promise((resolve, reject) => {
-            this.logger.log(`[CursorDriver] Executing agent for session ${sessionId}${nativeSessionId ? ` (resume: ${nativeSessionId})` : ''}...`);
+            console.log(`[CodexDriver] Executing codex for session ${sessionId}${nativeSessionId ? ` (resume: ${nativeSessionId})` : ''}...`);
 
-            const child = spawn('agent', args, {
+            const child = spawn(this.binary || 'codex', args, {
+                cwd: this.cwd,
                 env: { ...process.env },
-                stdio: ['ignore', 'pipe', 'pipe']
+                stdio: ['pipe', 'pipe', 'pipe'],
             });
 
             this.activeSessions.set(sessionId, child);
@@ -103,13 +104,17 @@ export class CursorDriver extends IDriver {
             let buffer = '';
             let errorBuffer = '';
             let finalResult = '';
-            let capturedNativeSessionId = nativeSessionId; // Track the native ID from init event
-
-            // Progress state (thinking + text, for live updates)
+            let capturedNativeSessionId = nativeSessionId;
             let progressText = '';
-            // Text-only accumulator (for final result)
             let textContent = '';
             const tools = [];
+
+            if (this.progressCb) {
+                this.progressCb({ sessionId, progressText: '_thinking..._' });
+            }
+
+            child.stdin.write(fullPrompt);
+            child.stdin.end();
 
             child.stdout.on('data', (data) => {
                 buffer += data.toString();
@@ -122,12 +127,11 @@ export class CursorDriver extends IDriver {
 
                     switch (event.type) {
                         case 'init':
-                            // Capture Cursor's native session ID for future resume
                             if (event.sessionId) {
                                 capturedNativeSessionId = event.sessionId;
+                                this.sessionThreads.set(sessionId, event.sessionId);
                             }
                             break;
-
                         case 'text':
                             if (this.streamCb) this.streamCb({ sessionId, chunk: event.text });
                             textContent += event.text;
@@ -136,23 +140,19 @@ export class CursorDriver extends IDriver {
                                 this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
                             }
                             break;
-
                         case 'thinking':
                             progressText += event.text;
                             if (this.progressCb) {
                                 this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
                             }
                             break;
-
                         case 'tool':
                             tools.push({ icon: event.icon, name: event.name });
                             if (this.progressCb) {
                                 this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
                             }
                             break;
-
                         case 'result':
-                            // Use textContent (not progressText) to exclude thinking from final result
                             finalResult = event.text || textContent;
                             break;
                     }
@@ -166,27 +166,40 @@ export class CursorDriver extends IDriver {
             child.on('close', (code) => {
                 this.activeSessions.delete(sessionId);
 
-                // Suppress callbacks if this session was force-killed
                 if (this.killedSessions.has(sessionId)) {
                     this.killedSessions.delete(sessionId);
                     reject(new Error('Session killed'));
                     return;
                 }
 
+                if (buffer.trim()) {
+                    const event = parseLine(buffer.trim());
+                    if (event?.type === 'result') {
+                        finalResult = event.text || textContent;
+                    } else if (event?.type === 'text') {
+                        textContent += event.text;
+                        finalResult = textContent;
+                    }
+                }
+
                 if (code !== 0 && code !== null) {
-                    this.logger.error(`[CursorDriver] Process exited with code ${code}: ${errorBuffer}`);
-                    if (this.errorCb) this.errorCb({ sessionId, error: new Error(`Exit ${code}: ${errorBuffer}`) });
-                    reject(new Error(`Exit ${code}`));
+                    const error = new Error(`Exit ${code}: ${errorBuffer}`);
+                    if (this.errorCb) this.errorCb({ sessionId, error });
+                    reject(error);
                     return;
                 }
 
-                if (this.completeCb) this.completeCb({ sessionId, result: finalResult, driverState: { nativeSessionId: capturedNativeSessionId } });
+                if (this.completeCb) {
+                    if (capturedNativeSessionId) {
+                        this.sessionThreads.set(sessionId, capturedNativeSessionId);
+                    }
+                    this.completeCb({ sessionId, result: finalResult, driverState: { nativeSessionId: capturedNativeSessionId } });
+                }
                 resolve();
             });
 
             child.on('error', (err) => {
                 this.activeSessions.delete(sessionId);
-                this.logger.error(`[CursorDriver] Spawn error:`, err);
                 if (this.errorCb) this.errorCb({ sessionId, error: err });
                 reject(err);
             });
@@ -200,12 +213,14 @@ export class CursorDriver extends IDriver {
             child.kill('SIGKILL');
             this.activeSessions.delete(sessionId);
         }
+        this.sessionThreads.delete(sessionId);
     }
 
     async stop() {
-        this.logger.log(`[CursorDriver] Stopping all ${this.activeSessions.size} active sessions...`);
+        console.log(`[CodexDriver] Stopping all ${this.activeSessions.size} active sessions...`);
         for (const child of this.activeSessions.values()) child.kill('SIGKILL');
         this.activeSessions.clear();
+        this.sessionThreads.clear();
     }
 
     onStream(cb) { this.streamCb = cb; }

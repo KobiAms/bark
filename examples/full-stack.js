@@ -1,11 +1,12 @@
 import { BarkCore } from '@bark/core';
 import { ClaudeCodeDriver } from '@bark/driver-claude-code';
+import { CodexDriver } from '@bark/driver-codex';
 import { GeminiDriver } from '@bark/driver-gemini';
 import { OpenCodeDriver } from '@bark/driver-opencode';
 import { CursorDriver } from '@bark/driver-cursor';
 import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
 import path from 'path';
-import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, CompactCommand } from '@bark/commands-core';
+import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, CompactCommand, ModelsCommand } from '@bark/commands-core';
 import { TelegramAdapter } from '@bark/adapter-telegram';
 import { WhatsAppAdapter } from '@bark/adapter-whatsapp';
 import { WhisperPlugin } from '@bark/plugin-speech-whisper';
@@ -36,6 +37,7 @@ async function main() {
 
     // 3. Drivers
     bark.useDriver('claude', new ClaudeCodeDriver({ model: 'haiku' }));
+    bark.useDriver('codex', new CodexDriver());
     bark.useDriver('gemini', new GeminiDriver());
     bark.useDriver('opencode', new OpenCodeDriver());
     bark.useDriver('cursor', new CursorDriver());
@@ -63,6 +65,7 @@ async function main() {
     bark.useCommand(new DeleteCommand());
     bark.useCommand(new ListAgentsCommand());
     bark.useCommand(new RestartCommand());
+    bark.useCommand(new ModelsCommand());
 
     // Graceful shutdown — guard against double-firing (SIGINT + SIGTERM both arrive on Ctrl+C)
     let stopping = false;

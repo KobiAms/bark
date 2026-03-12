@@ -4,6 +4,12 @@ You are helping the user set up and run Bark on their computer. Follow these ste
 
 ---
 
+## Step 0 — Install dependencies
+
+Run `yarn install` and confirm it completes successfully before continuing. If it fails, troubleshoot the error with the user before moving on.
+
+---
+
 ## Step 1 — Detect installed drivers
 
 Run the following commands silently to check what's available on the machine:

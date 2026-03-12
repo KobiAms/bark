@@ -9,6 +9,7 @@
  *
  * Usage:
  *   node packages/drivers/qa/harness.js claude-code
+ *   node packages/drivers/qa/harness.js codex
  *   node packages/drivers/qa/harness.js gemini
  *   node packages/drivers/qa/harness.js opencode
  *   node packages/drivers/qa/harness.js all
@@ -20,6 +21,7 @@
 
 import { execSync } from 'child_process';
 import { ClaudeCodeDriver } from '@bark/driver-claude-code';
+import { CodexDriver } from '@bark/driver-codex';
 import { GeminiDriver } from '@bark/driver-gemini';
 import { OpenCodeDriver } from '@bark/driver-opencode';
 import { CursorDriver } from '@bark/driver-cursor';
@@ -142,6 +144,7 @@ const CAPABILITIES = [
 
 const DRIVER_MAP = {
     'claude-code': { create: () => new ClaudeCodeDriver(), cli: 'claude' },
+    'codex':       { create: () => new CodexDriver({ cwd: process.cwd() }), cli: 'codex' },
     'gemini':      { create: () => new GeminiDriver({ cwd: process.cwd() }), cli: 'gemini' },
     'opencode':    { create: () => new OpenCodeDriver({ cwd: process.cwd() }), cli: 'opencode' },
     'cursor':      { create: () => new CursorDriver({ workspace: process.cwd() }), cli: 'agent' },

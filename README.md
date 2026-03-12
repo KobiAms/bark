@@ -19,6 +19,7 @@ Bark is a lightweight, framework-agnostic AI agent orchestration engine. It prov
 ### Drivers (AI)
 - `@bark/driver-echo` - Mock loopback driver for testing.
 - `@bark/driver-claude-code` - Integration with Anthropic's Claude CLI.
+- `@bark/driver-codex` - Integration with OpenAI's Codex CLI.
 - `@bark/driver-gemini` - Integration with Google's Gemini CLI.
 - `@bark/driver-opencode` - Integration with the OpenCode CLI.
 - `@bark/driver-cursor` - Integration with the Cursor CLI.

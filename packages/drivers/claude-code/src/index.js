@@ -33,7 +33,7 @@ export class ClaudeCodeDriver extends IDriver {
     }
 
     getModels() {
-        return ['haiku', 'sonnet', 'opus'];
+        return ['haiku', 'sonnet', 'opus', 'claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-6'];
     }
 
     async sendCommand(sessionId, cmd, systemPrompt, model, driverState = {}) {
