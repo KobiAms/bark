@@ -158,10 +158,20 @@ async _onCommandComplete(event) {
  * @param {import('../interfaces/index.js').BarkEvent} event
  */
 async _onFileReady(event) {
-    if (!event.filePath) return;
-    const r = this._getAdapterAndReplyTo(event.sessionId);
-    if (!r?.adapter) return;
+    this.logger.log(`[MessageRouter] FILE_READY event received for session ${event.sessionId}`);
 
+    if (!event.filePath) {
+        this.logger.error(`[MessageRouter] FILE_READY missing filePath!`);
+        return;
+    }
+
+    const r = this._getAdapterAndReplyTo(event.sessionId);
+    if (!r?.adapter) {
+        this.logger.error(`[MessageRouter] No adapter found for session ${event.sessionId}`);
+        return;
+    }
+
+    this.logger.log(`[MessageRouter] Routing file to adapter: ${r.adapterName}`);
     await r.adapter.sendFile(r.replyTo, {
         filePath: event.filePath,
         mimeType: event.mimeType,

@@ -287,11 +287,19 @@ export class WhatsAppAdapter extends IAdapter {
     }
 
     async sendFile(sessionId, fileData, metadata = {}) {
-        if (!this.groupChat) throw new Error('[WhatsAppAdapter] not connected to target group');
+        if (!this.groupChat) {
+            const errMsg = '[WhatsAppAdapter] not connected to target group';
+            this.logger.error(errMsg);
+            throw new Error(errMsg);
+        }
 
         try {
+            this.logger.log(`[WhatsAppAdapter] Sending file: ${fileData.fileName} (${fileData.filePath})`);
             const { MessageMedia } = await import('whatsapp-web.js');
+
+            this.logger.log(`[WhatsAppAdapter] Loading media from path: ${fileData.filePath}`);
             const media = await MessageMedia.fromFilePath(fileData.filePath);
+            this.logger.log(`[WhatsAppAdapter] Media loaded successfully, size: ${media.data?.length || 'unknown'}`);
 
             const options = {};
             if (fileData.caption) {
@@ -301,12 +309,13 @@ export class WhatsAppAdapter extends IAdapter {
                 options.quotedMessageId = metadata.replyToMessageId;
             }
 
+            this.logger.log(`[WhatsAppAdapter] Sending message to group: ${this.groupChat.name}`);
             const sent = await this.groupChat.sendMessage(media, options);
             this.msgCache.set(sent.id._serialized, sent);
-            this.logger.log(`[WhatsAppAdapter] Sent file: ${fileData.fileName || 'untitled'}`);
+            this.logger.log(`[WhatsAppAdapter] ✅ File sent successfully: ${fileData.fileName || 'untitled'} (ID: ${sent.id._serialized})`);
             return { messageId: sent.id._serialized };
         } catch (err) {
-            this.logger.error('[WhatsAppAdapter] Failed to send file:', err.message);
+            this.logger.error('[WhatsAppAdapter] ❌ Failed to send file:', err);
             throw err;
         }
     }

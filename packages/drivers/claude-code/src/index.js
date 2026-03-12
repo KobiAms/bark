@@ -72,36 +72,95 @@ export class ClaudeCodeDriver extends IDriver {
     }
 
     async sendCommand(sessionId, cmd, systemPrompt, model, driverState = {}) {
+        const cmdTrimmed = cmd.trim().toLowerCase();
+
         // Test commands for file delivery demo
-        if (cmd.trim().toLowerCase() === 'send image' || cmd.trim().toLowerCase() === 'send file') {
-            const fileData = generateTestImage();
-            if (this.fileReadyCb) {
+        if (cmdTrimmed === 'send image' || cmdTrimmed === 'send file') {
+            try {
+                this.logger.log('[ClaudeCodeDriver] TEST: Generating test image...');
+                const fileData = generateTestImage();
+                this.logger.log(`[ClaudeCodeDriver] TEST: Image generated at ${fileData.filePath}`);
+
+                if (!this.fileReadyCb) {
+                    this.logger.error('[ClaudeCodeDriver] ERROR: fileReadyCb is not registered!');
+                    if (this.completeCb) {
+                        this.completeCb({ sessionId, result: '❌ File callback not registered' });
+                    }
+                    return;
+                }
+
+                this.logger.log('[ClaudeCodeDriver] TEST: Emitting FILE_READY event...');
                 this.fileReadyCb({ sessionId, ...fileData });
-            }
-            if (this.completeCb) {
-                this.completeCb({ sessionId, result: 'Image generated and sent! 🖼️' });
+                this.logger.log('[ClaudeCodeDriver] TEST: FILE_READY emitted successfully');
+
+                if (this.completeCb) {
+                    this.completeCb({ sessionId, result: 'Image generated and sent! 🖼️' });
+                }
+            } catch (err) {
+                this.logger.error('[ClaudeCodeDriver] ERROR generating image:', err);
+                if (this.completeCb) {
+                    this.completeCb({ sessionId, result: `❌ Error: ${err.message}` });
+                }
             }
             return;
         }
 
-        if (cmd.trim().toLowerCase() === 'send chart') {
-            const fileData = generateTestChart();
-            if (this.fileReadyCb) {
+        if (cmdTrimmed === 'send chart') {
+            try {
+                this.logger.log('[ClaudeCodeDriver] TEST: Generating test chart...');
+                const fileData = generateTestChart();
+                this.logger.log(`[ClaudeCodeDriver] TEST: Chart generated at ${fileData.filePath}`);
+
+                if (!this.fileReadyCb) {
+                    this.logger.error('[ClaudeCodeDriver] ERROR: fileReadyCb is not registered!');
+                    if (this.completeCb) {
+                        this.completeCb({ sessionId, result: '❌ File callback not registered' });
+                    }
+                    return;
+                }
+
+                this.logger.log('[ClaudeCodeDriver] TEST: Emitting FILE_READY event...');
                 this.fileReadyCb({ sessionId, ...fileData });
-            }
-            if (this.completeCb) {
-                this.completeCb({ sessionId, result: 'Chart generated and sent! 📊' });
+                this.logger.log('[ClaudeCodeDriver] TEST: FILE_READY emitted successfully');
+
+                if (this.completeCb) {
+                    this.completeCb({ sessionId, result: 'Chart generated and sent! 📊' });
+                }
+            } catch (err) {
+                this.logger.error('[ClaudeCodeDriver] ERROR generating chart:', err);
+                if (this.completeCb) {
+                    this.completeCb({ sessionId, result: `❌ Error: ${err.message}` });
+                }
             }
             return;
         }
 
-        if (cmd.trim().toLowerCase() === 'send document') {
-            const fileData = generateTestPdf();
-            if (this.fileReadyCb) {
+        if (cmdTrimmed === 'send document') {
+            try {
+                this.logger.log('[ClaudeCodeDriver] TEST: Generating test document...');
+                const fileData = generateTestPdf();
+                this.logger.log(`[ClaudeCodeDriver] TEST: Document generated at ${fileData.filePath}`);
+
+                if (!this.fileReadyCb) {
+                    this.logger.error('[ClaudeCodeDriver] ERROR: fileReadyCb is not registered!');
+                    if (this.completeCb) {
+                        this.completeCb({ sessionId, result: '❌ File callback not registered' });
+                    }
+                    return;
+                }
+
+                this.logger.log('[ClaudeCodeDriver] TEST: Emitting FILE_READY event...');
                 this.fileReadyCb({ sessionId, ...fileData });
-            }
-            if (this.completeCb) {
-                this.completeCb({ sessionId, result: 'Document generated and sent! 📄' });
+                this.logger.log('[ClaudeCodeDriver] TEST: FILE_READY emitted successfully');
+
+                if (this.completeCb) {
+                    this.completeCb({ sessionId, result: 'Document generated and sent! 📄' });
+                }
+            } catch (err) {
+                this.logger.error('[ClaudeCodeDriver] ERROR generating document:', err);
+                if (this.completeCb) {
+                    this.completeCb({ sessionId, result: `❌ Error: ${err.message}` });
+                }
             }
             return;
         }
