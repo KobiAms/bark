@@ -2,6 +2,8 @@ import { IDriver } from '@bark/core';
 import { spawn, execSync } from 'child_process';
 import { parseLine, buildProgressText } from './parser.js';
 
+const DEFAULT_MODELS = ['opencode/big-pickle'];
+
 export class OpenCodeDriver extends IDriver {
     /**
      * @param {Object} config
@@ -19,20 +21,27 @@ export class OpenCodeDriver extends IDriver {
         this.errorCb = null;
         this.completeCb = null;
 
-        this._models = null; // populated lazily at spawn time
+        this._defaultModels = [...DEFAULT_MODELS];
+        this._fetchedModels = [];
     }
 
     getModels() {
-        return this._models ?? [];
+        return [...new Set([...this._defaultModels, ...this._fetchedModels])];
+    }
+
+    /** Fire-and-forget async model fetch — appends to defaults on success. */
+    _refreshModels() {
+        try {
+            const output = execSync('opencode models', { encoding: 'utf8', timeout: 15000 });
+            this._fetchedModels = output.split('\n').map(l => l.trim()).filter(Boolean);
+            this.logger.log(`[OpenCodeDriver] Fetched ${this._fetchedModels.length} models from CLI.`);
+        } catch (err) {
+            this.logger.warn(`[OpenCodeDriver] Model fetch failed, using defaults: ${err.message}`);
+        }
     }
 
     async spawn(config = {}) {
-        try {
-            const output = execSync('opencode models', { encoding: 'utf8', timeout: 10000 });
-            this._models = output.split('\n').map(l => l.trim()).filter(Boolean);
-        } catch {
-            this._models = [];
-        }
+        this._refreshModels();
         this.logger.log('[OpenCodeDriver] Ready to spawn sessions on demand.');
     }
 
