@@ -1,6 +1,7 @@
 import { IAdapter } from '@bark/core';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from 'fs';
+import { dirname, join, extname } from 'path';
+import { tmpdir } from 'os';
 
 export class TelegramAdapter extends IAdapter {
     /**
@@ -204,9 +205,24 @@ export class TelegramAdapter extends IAdapter {
                     if (this.botInfo && msg.from?.id === this.botInfo.id) continue;
 
                     const text = msg.text || msg.caption || '';
-                    if (!text.trim()) continue;
+                    const voice = msg.voice || msg.audio;
+
+                    if (!text.trim() && !voice) continue;
 
                     if (this.messageCb) {
+                        let payload = text.trim();
+                        
+                        if (voice) {
+                            try {
+                                console.log(`[TelegramAdapter] Downloading voice message (${voice.file_id})...`);
+                                const filePath = await this._downloadFile(voice.file_id);
+                                payload = { type: 'audio', filePath };
+                            } catch (err) {
+                                console.error(`[TelegramAdapter] Failed to download voice: ${err.message}`);
+                                continue; // Skip this message if we can't get the audio
+                            }
+                        }
+
                         let quotedMessageMetadata = null;
                         if (msg.reply_to_message) {
                             const q = msg.reply_to_message;
@@ -220,7 +236,7 @@ export class TelegramAdapter extends IAdapter {
                         this.messageCb({
                             type: 'message.received',
                             sessionId: `tg-${this.chatId}`,
-                            payload: text,
+                            payload,
                             senderId: String(msg.from?.id || 'unknown'),
                             rawId: String(msg.message_id),
                             quotedMessageMetadata
@@ -234,5 +250,26 @@ export class TelegramAdapter extends IAdapter {
                 await new Promise(r => { this.pollTimeout = setTimeout(r, Math.min(5000 * this.consecutiveErrors, 30000)); });
             }
         }
+    }
+
+    /**
+     * Download a file from Telegram and return local path.
+     * @private
+     */
+    async _downloadFile(fileId) {
+        const file = await this._api('getFile', { file_id: fileId });
+        const url = `https://api.telegram.org/file/bot${this.token}/${file.file_path}`;
+        
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Download failed: ${res.statusText}`);
+        
+        const buffer = Buffer.from(await res.arrayBuffer());
+        
+        const workDir = mkdtempSync(join(tmpdir(), 'bark-tg-audio-'));
+        const ext = extname(file.file_path) || '.ogg';
+        const filePath = join(workDir, `voice${ext}`);
+        
+        writeFileSync(filePath, buffer);
+        return filePath;
     }
 }

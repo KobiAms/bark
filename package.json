@@ -7,7 +7,8 @@
     "packages/adapters/*",
     "packages/drivers/*",
     "packages/storages/*",
-    "packages/commands/*"
+    "packages/commands/*",
+    "packages/plugins/*"
   ],
   "scripts": {
     "start": "bash start.sh",

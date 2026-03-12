@@ -1,0 +1,10 @@
+{
+  "name": "@bark/plugin-speech-whisper",
+  "version": "1.0.0",
+  "description": "Whisper.cpp speech-to-text plugin for Bark — transcribes audio payloads before routing",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@bark/core": "*"
+  }
+}

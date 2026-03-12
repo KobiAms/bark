@@ -10,7 +10,7 @@ export class OpenCodeDriver extends IDriver {
     constructor(config = {}) {
         super();
         this.cwd = config.cwd || process.cwd();
-        this.model = config.model || 'anthropic/claude-sonnet-4-6';
+        this.model = config.model || 'opencode/big-pickle';
         this.activeSessions = new Map();  // barkSessionId -> ChildProcess
         this.killedSessions = new Set();
 

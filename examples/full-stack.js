@@ -8,6 +8,7 @@ import path from 'path';
 import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, CompactCommand } from '@bark/commands-core';
 import { TelegramAdapter } from '@bark/adapter-telegram';
 import { WhatsAppAdapter } from '@bark/adapter-whatsapp';
+import { WhisperPlugin } from '@bark/plugin-speech-whisper';
 
 async function main() {
     console.log('Initializing Bark Core...');
@@ -18,7 +19,11 @@ async function main() {
     bark.useStorage(new JsonlStorage({ filePath: path.join(dbDir, 'sessions.jsonl') }));
     bark.useAgentRegistry(new JsonlAgentRegistry({ filePath: path.join(dbDir, 'agents.jsonl') }));
 
-    // 2. Drivers
+    // 2. Plugins
+    const whisperModel = process.env.WHISPER_MODEL_PATH || '/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin';
+    bark.usePlugin(new WhisperPlugin({ modelPath: whisperModel }));
+
+    // 3. Drivers
     bark.useDriver('claude', new ClaudeCodeDriver({ model: 'haiku' }));
     bark.useDriver('gemini', new GeminiDriver());
     bark.useDriver('opencode', new OpenCodeDriver());

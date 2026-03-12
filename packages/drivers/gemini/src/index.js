@@ -147,6 +147,17 @@ export class GeminiDriver extends IDriver {
                     return;
                 }
 
+                // Flush remaining buffer — last line may lack a trailing newline
+                if (buffer.trim()) {
+                    const event = parseLine(buffer.trim());
+                    if (event?.type === 'result') {
+                        finalResult = event.text || textContent;
+                    } else if (event?.type === 'text') {
+                        textContent += event.text;
+                        finalResult = textContent;
+                    }
+                }
+
                 if (code !== 0 && code !== null) {
                     console.error(`[GeminiDriver] Process exited with code ${code}: ${errorBuffer}`);
                     if (this.errorCb) this.errorCb({ sessionId, error: new Error(`Exit ${code}: ${errorBuffer}`) });

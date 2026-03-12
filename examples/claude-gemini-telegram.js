@@ -5,6 +5,7 @@ import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
 import path from 'path';
 import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, CompactCommand } from '@bark/commands-core';
 import { TelegramAdapter } from '@bark/adapter-telegram';
+import { WhisperPlugin } from '@bark/plugin-speech-whisper';
 
 async function main() {
     const bark = new BarkCore();
@@ -14,17 +15,21 @@ async function main() {
     bark.useStorage(new JsonlStorage({ filePath: path.join(dbDir, 'sessions.jsonl') }));
     bark.useAgentRegistry(new JsonlAgentRegistry({ filePath: path.join(dbDir, 'agents.jsonl') }));
 
-    // 2. Drivers
+    // 2. Plugins
+    const whisperModel = process.env.WHISPER_MODEL_PATH || '/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin';
+    bark.usePlugin(new WhisperPlugin({ modelPath: whisperModel }));
+
+    // 3. Drivers
     bark.useDriver('claude', new ClaudeCodeDriver({ model: 'sonnet' }));
     bark.useDriver('gemini', new GeminiDriver());
 
-    // 3. Adapters
+    // 4. Adapters
     bark.useAdapter('telegram', new TelegramAdapter({
         token: process.env.TELEGRAM_TOKEN,
         stateFile: path.join(dbDir, 'telegram-state.json'),
     }));
 
-    // 4. Commands
+    // 5. Commands
     bark.useCommand(new HelpCommand());
     bark.useCommand(new PingCommand());
     bark.useCommand(new SwitchDriverCommand());

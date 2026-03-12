@@ -51,6 +51,7 @@ export class MessageRouter {
     start() {
         this._unsubs.push(
             this.eventBus.subscribe(this.inputEvent, (event) => this.handleIncomingMessage(event)),
+            this.eventBus.subscribe(EventTypes.MESSAGE_RECEIVED, (event) => this.handleMediaIndicator(event)),
             this.eventBus.subscribe(EventTypes.STREAM_CHUNK,      (event) => this._onStreamChunk(event)),
             this.eventBus.subscribe(EventTypes.STREAM_PROGRESS,   (event) => this._onStreamProgress(event)),
             this.eventBus.subscribe(EventTypes.DRIVER_COMPLETE,   (event) => this._onDriverComplete(event)),
@@ -138,20 +139,129 @@ export class MessageRouter {
             return sent?.messageId || null;
         }
     }
+async _onCommandComplete(event) {
+    if (event.result == null) return;
+    const r = this._getAdapterAndReplyTo(event.sessionId);
+    if (!r?.adapter) return;
+    const prefix = this._getAgentPrefix(event.sessionId);
+    const sent = await r.adapter.sendMessage(r.replyTo, prefix + event.result, { replyToMessageId: r.lastMessageId }).catch(() => null);
+    if (sent?.messageId) {
+        this.liveMessageIds.set(event.sessionId, sent.messageId);
+    }
+}
 
-    async _onCommandComplete(event) {
-        if (event.result == null) return;
-        const r = this._getAdapterAndReplyTo(event.sessionId);
-        if (!r?.adapter) return;
-        const prefix = this._getAgentPrefix(event.sessionId);
-        const sent = await r.adapter.sendMessage(r.replyTo, prefix + event.result, { replyToMessageId: r.lastMessageId }).catch(() => null);
-        if (sent?.messageId) {
-            this.liveMessageIds.set(event.sessionId, sent.messageId);
+/**
+ * Resolve which agent/driver should handle a payload.
+ * @private
+ */
+async _resolveRouting(event) {
+    const { payload } = event;
+    const agentRegistry = this.registry.getAgentRegistry();
+    const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
+
+    let targetAgentName = null;
+    let targetDriverName = this.defaultDriverName;
+    let targetSystemPrompt = null;
+    let targetModel = null;
+    let targetPayload = payload;
+
+    // A. Reply-To Routing — persisted, survives restart
+    if (agentRegistry && event.quotedMessageMetadata?.messageId) {
+        const agentName = await this._getMessageAgent(event.quotedMessageMetadata.messageId);
+        if (agentName) {
+            const agent = await agentRegistry.getAgent(agentName);
+            if (agent) {
+                targetAgentName = agentName;
+                targetDriverName = agent.driver;
+                targetSystemPrompt = agent.systemPrompt;
+                targetModel = agent.model || null;
+                targetPayload = trimmedPayload;
+            }
         }
     }
 
+    // B. senderName fallback (for clients that don't expose messageId)
+    if (!targetAgentName && agentRegistry && event.quotedMessageMetadata?.senderName) {
+        const agent = await agentRegistry.getAgent(event.quotedMessageMetadata.senderName);
+        if (agent) {
+            targetAgentName = event.quotedMessageMetadata.senderName;
+            targetDriverName = agent.driver;
+            targetSystemPrompt = agent.systemPrompt;
+            targetModel = agent.model || null;
+            targetPayload = trimmedPayload;
+        }
+    }
+
+    // C. Mention Detection (@name)
+    if (!targetAgentName && trimmedPayload.startsWith('@')) {
+        const parts = trimmedPayload.split(/\s+/);
+        const rawName = parts[0].substring(1);
+
+        if (agentRegistry) {
+            const agent = await agentRegistry.getAgent(rawName);
+            if (agent) {
+                targetAgentName = rawName;
+                targetDriverName = agent.driver;
+                targetSystemPrompt = agent.systemPrompt;
+                targetModel = agent.model || null;
+
+                const nameIndex = payload.indexOf('@' + rawName);
+                targetPayload = payload.substring(nameIndex + rawName.length + 1).trim();
+            }
+        }
+    }
+
+    return { targetAgentName, targetDriverName, targetSystemPrompt, targetModel, targetPayload };
+}
+
+/**
+ * Provide immediate feedback for non-text payloads (e.g. voice messages).
+ * @param {import('../interfaces/index.js').BarkEvent} event
+ */
+async handleMediaIndicator(event) {
+    // If the router is listening to MESSAGE_RECEIVED as its primary input, 
+    // handleIncomingMessage will handle it. We only act here if there's a 
+    // transformation plugin (like Whisper) in between.
+    if (this.inputEvent === EventTypes.MESSAGE_RECEIVED) return;
+
+    const { sessionId, payload, adapterName } = event;
+    if (typeof payload === 'string') return; // Whisper or similar will handle text later
+
+    // Store routing info for this session early so we can send the placeholder
+    this.sessionRouting.set(sessionId, { adapterName, lastMessageId: event.rawId });
+
+    const { targetAgentName } = await this._resolveRouting(event);
+    const effectiveSessionId = targetAgentName ? `${targetAgentName}:${sessionId}` : sessionId;
+
+    if (targetAgentName) {
+        this.sessionRouting.set(effectiveSessionId, {
+            adapterName,
+            replyTo: sessionId,
+            lastMessageId: event.rawId
+        });
+    }
+
+    const adapter = this.registry.getAdapter(adapterName);
+    if (adapter) {
+        const prefix = this._getAgentPrefix(effectiveSessionId);
+        const label = payload?.type === 'audio' ? '_listening..._' : '_processing..._';
+        const placeholder = prefix ? prefix.trimEnd() + ' ' + label : label;
+
+        const sent = await adapter.sendMessage(sessionId, placeholder, { replyToMessageId: event.rawId }).catch(() => null);
+        if (sent?.messageId) {
+            this.liveMessageIds.set(effectiveSessionId, sent.messageId);
+            // Persist mapping if needed
+            if (targetAgentName) {
+                await this._setMessageAgent(sent.messageId, targetAgentName);
+            }
+        }
+    }
+}
+
+/**
+ * @param {import('../interfaces/index.js').BarkEvent} event
+ */
     _onStreamChunk(event) {
-        if (event.chunk == null) return;
         if (this.finishedSessions.has(event.sessionId)) return;
         const r = this._getAdapterAndReplyTo(event.sessionId);
         if (!r?.adapter) return;
@@ -278,82 +388,43 @@ export class MessageRouter {
 
         try {
             // 1. Check for commands
-            for (const command of this.registry.getAllCommands()) {
-                if (command.match(payload)) {
-                    await command.execute({
-                        sessionId,
-                        payload,
-                        adapterName,
-                        registry: this.registry,
-                        eventBus: this.eventBus,
-                        storage
-                    });
-                    return;
+            if (typeof payload === 'string') {
+                for (const command of this.registry.getAllCommands()) {
+                    if (command.match(payload)) {
+                        await command.execute({
+                            sessionId,
+                            payload,
+                            adapterName,
+                            registry: this.registry,
+                            eventBus: this.eventBus,
+                            storage
+                        });
+                        return;
+                    }
                 }
             }
 
             // 2. Routing Detection (Mentions vs Replies)
-            let targetPayload = payload;
-            let targetAgentName = null;
-            let targetDriverName = this.defaultDriverName;
-            let targetSystemPrompt = null;
-            let targetModel = null;
+            const { 
+                targetAgentName, 
+                targetDriverName, 
+                targetSystemPrompt, 
+                targetModel, 
+                targetPayload 
+            } = await this._resolveRouting(event);
 
-            const agentRegistry = this.registry.getAgentRegistry();
-            const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
-
-            // A. Reply-To Routing — persisted, survives restart
-            if (agentRegistry && event.quotedMessageMetadata?.messageId) {
-                const agentName = await this._getMessageAgent(event.quotedMessageMetadata.messageId);
-                if (agentName) {
-                    const agent = await agentRegistry.getAgent(agentName);
-                    if (agent) {
-                        targetAgentName = agentName;
-                        targetDriverName = agent.driver;
-                        targetSystemPrompt = agent.systemPrompt;
-                        targetModel = agent.model || null;
-                        targetPayload = trimmedPayload;
-                    }
-                }
-            }
-
-            // B. senderName fallback (for clients that don't expose messageId)
-            if (!targetAgentName && agentRegistry && event.quotedMessageMetadata?.senderName) {
-                const agent = await agentRegistry.getAgent(event.quotedMessageMetadata.senderName);
-                if (agent) {
-                    targetAgentName = event.quotedMessageMetadata.senderName;
-                    targetDriverName = agent.driver;
-                    targetSystemPrompt = agent.systemPrompt;
-                    targetModel = agent.model || null;
-                    targetPayload = trimmedPayload;
-                }
-            }
-
-            // C. Mention Detection (@name)
-            if (!targetAgentName && trimmedPayload.startsWith('@')) {
-                const parts = trimmedPayload.split(/\s+/);
+            if (typeof payload === 'string' && payload.trim().startsWith('@') && !targetAgentName) {
+                // If it looks like a mention but no agent found, it might be an unknown agent
+                const parts = payload.trim().split(/\s+/);
                 const rawName = parts[0].substring(1);
+                await this._replyToSender(sessionId, `❓ Unknown agent: @${rawName}`);
+                return;
+            }
 
-                if (agentRegistry) {
-                    const agent = await agentRegistry.getAgent(rawName);
-                    if (agent) {
-                        targetAgentName = rawName;
-                        targetDriverName = agent.driver;
-                        targetSystemPrompt = agent.systemPrompt;
-                        targetModel = agent.model || null;
-
-                        const nameIndex = payload.indexOf('@' + rawName);
-                        targetPayload = payload.substring(nameIndex + rawName.length + 1).trim();
-
-                        if (!targetPayload) {
-                            await this._replyToSender(sessionId, `*@${rawName}* is listening! What would you like to ask?`);
-                            return;
-                        }
-                    } else {
-                        await this._replyToSender(sessionId, `❓ Unknown agent: @${rawName}`);
-                        return;
-                    }
-                }
+            if (targetAgentName && typeof targetPayload === 'string' && !targetPayload.trim()) {
+                 const prefix = this._getAgentPrefix(targetAgentName + ':' + sessionId);
+                 await this._replyToSender(sessionId, `${prefix}I am listening! What would you like to ask?`);
+                 return;
             }
 
             // 3. Session Management
@@ -384,7 +455,7 @@ export class MessageRouter {
                 return;
             }
 
-            // 4. Send thinking placeholder and store messageId for live edits
+            // 4. Send thinking placeholder (or update existing one)
             const routing = this.sessionRouting.get(effectiveSessionId);
             if (routing) {
                 const adapter = this.registry.getAdapter(routing.adapterName);
@@ -394,13 +465,20 @@ export class MessageRouter {
                     const thinkingLabel = prefix
                         ? prefix.trimEnd() + ' _on it._'
                         : '_on it._';
-                    const sent = await adapter.sendMessage(replyTo, thinkingLabel, { replyToMessageId: routing.lastMessageId }).catch(() => null);
-                    if (sent?.messageId) {
-                        this.liveMessageIds.set(effectiveSessionId, sent.messageId);
+                    
+                    const existingMessageId = this.liveMessageIds.get(effectiveSessionId);
+                    if (existingMessageId) {
+                        // Edit the existing "listening" or "processing" message
+                        await adapter.editMessage(replyTo, existingMessageId, thinkingLabel).catch(() => {});
                         this.thinkingStartTime.set(effectiveSessionId, Date.now());
-                        // Persist thinking message → agent mapping too (for immediate reply-to)
-                        if (targetAgentName) {
-                            await this._setMessageAgent(sent.messageId, targetAgentName);
+                    } else {
+                        const sent = await adapter.sendMessage(replyTo, thinkingLabel, { replyToMessageId: routing.lastMessageId }).catch(() => null);
+                        if (sent?.messageId) {
+                            this.liveMessageIds.set(effectiveSessionId, sent.messageId);
+                            this.thinkingStartTime.set(effectiveSessionId, Date.now());
+                            if (targetAgentName) {
+                                await this._setMessageAgent(sent.messageId, targetAgentName);
+                            }
                         }
                     }
                 }

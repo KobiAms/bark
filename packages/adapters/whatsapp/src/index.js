@@ -1,8 +1,9 @@
 import { IAdapter } from '@bark/core';
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
-import { existsSync, rmSync } from 'fs';
-import path from 'path';
+import { existsSync, rmSync, writeFileSync, mkdtempSync } from 'fs';
+import path, { join, extname } from 'path';
+import { tmpdir } from 'os';
 
 /**
  * Chromium leaves behind singleton lock/socket files when the process is killed
@@ -170,6 +171,25 @@ export class WhatsAppAdapter extends IAdapter {
         const sender = contact.pushname || contact.number;
         
         let hasMedia = msg.hasMedia;
+        let payload = msg.body.trim();
+
+        if (hasMedia && msg.type === 'ptt' || msg.type === 'audio') {
+            try {
+                console.log(`[WhatsAppAdapter] Downloading audio message...`);
+                const media = await msg.downloadMedia();
+                if (media && media.data) {
+                    const workDir = mkdtempSync(join(tmpdir(), 'bark-wa-audio-'));
+                    // WhatsApp often sends 'audio/ogg; codecs=opus'
+                    const ext = media.mimetype ? (media.mimetype.includes('ogg') ? '.ogg' : '.mp3') : '.ogg';
+                    const filePath = join(workDir, `voice${ext}`);
+                    writeFileSync(filePath, Buffer.from(media.data, 'base64'));
+                    payload = { type: 'audio', filePath };
+                }
+            } catch (err) {
+                console.error(`[WhatsAppAdapter] Failed to download audio: ${err.message}`);
+                // fallback to plain empty body if download fails
+            }
+        }
 
         // Emulate BarkEvent structure
         const event = {
@@ -177,7 +197,7 @@ export class WhatsAppAdapter extends IAdapter {
             sessionId: `wa-group-${chat.id.user}`,
             senderId: contact.number || contact.id?.user || sender,
             senderName: sender,
-            payload: msg.body.trim(),
+            payload,
             rawId: msg.id._serialized, // Store for edits/replies
             hasMedia,
             isReply: msg.hasQuotedMsg,
