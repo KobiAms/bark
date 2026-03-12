@@ -23,11 +23,9 @@ Then run `yarn install` and confirm it completes successfully before continuing.
 Run the following commands silently to check what's available on the machine:
 
 ```bash
-which claude
-which codex
-which gemini
-which opencode
-which cursor
+for cmd in claude codex gemini opencode cursor; do
+  which $cmd || true
+done
 ```
 
 Report which drivers were found. For each detected driver, suggest a default model:
@@ -60,7 +58,7 @@ Check silently whether the prerequisites are already installed:
 
 ```bash
 which ffmpeg
-which whisper-cpp
+(which whisper-cpp || which whisper-cli)
 ls /opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin 2>/dev/null || \
 ls /usr/local/share/whisper-cpp/models/ggml-base.en.bin 2>/dev/null
 ```
