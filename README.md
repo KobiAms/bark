@@ -28,7 +28,15 @@ Bark is a lightweight, framework-agnostic AI agent orchestration engine. It prov
 - `@bark/storage-jsonl` - Persistent JSONL file-based session storage.
 
 ### Commands
-- `@bark/commands-core` - Built-in commands: `/ping`, `/switch`, `/new`, `/delete`, `/list`, `/restart`, `/stop`, `/compact`.
+- `@bark/commands-core` - Built-in chat commands:
+  - `/ping` — health check
+  - `/switch <driver>` — switch the active AI driver (e.g. `/switch gemini`)
+  - `/new <name> [driver]` — create a named agent
+  - `/delete <name>` — delete an agent
+  - `/list` — list all agents and their drivers
+  - `/restart` — restart Bark Core in place
+  - `/stop` — stop the current agent's active session
+  - `/compact` — summarize and compress the session history
 
 ## Quick Start
 
