@@ -9,12 +9,16 @@ export class TelegramAdapter extends IAdapter {
      * @param {string} config.token - Telegram Bot Token
      * @param {string} [config.chatId] - Optional pinned chat ID to listen to
      * @param {string} [config.stateFile] - Path to persist chatId across restarts
+     * @param {string[]} [config.allowedUserIds] - Allowlist of Telegram user IDs. If set, messages from any other user are silently ignored.
      */
     constructor(config) {
         super();
         this.token = config.token;
         this.stateFile = config.stateFile || null;
-        this.chatId = config.chatId || this._loadChatId() || null;
+        this.chatId = config.chatId || null;
+        this.allowedUserIds = config.allowedUserIds
+            ? new Set(config.allowedUserIds.map(String))
+            : null;
         this.polling = false;
         this.lastUpdateId = 0;
         this.pollTimeout = null;
@@ -29,6 +33,7 @@ export class TelegramAdapter extends IAdapter {
 
     async start() {
         if (!this.token) throw new Error('[TelegramAdapter] Token is required');
+        if (!this.allowedUserIds) throw new Error('[TelegramAdapter] allowedUserIds is required. Set TELEGRAM_ALLOWED_USER_IDS in your env file. Get your user ID from @userinfobot on Telegram.');
         
         if (this.token === 'mock') {
             console.log('[TelegramAdapter] Running in MOCK mode. Bypassing API validation.');
@@ -39,7 +44,11 @@ export class TelegramAdapter extends IAdapter {
         const me = await this._api('getMe', {});
         this.botInfo = me;
         console.log(`[TelegramAdapter] Bot connected: @${me.username}`);
-        
+
+        if (!this.chatId) {
+            this.chatId = this._loadChatId(me.id) || null;
+        }
+
         if (this.chatId) {
             console.log(`[TelegramAdapter] Listening strictly to chat: ${this.chatId}`);
         } else {
@@ -130,10 +139,14 @@ export class TelegramAdapter extends IAdapter {
 
     // --- State Persistence ---
 
-    _loadChatId() {
+    _loadChatId(botId) {
         if (!this.stateFile) return null;
         try {
             const data = JSON.parse(readFileSync(this.stateFile, 'utf8'));
+            if (!data.botId || data.botId !== botId) {
+                console.log(`[TelegramAdapter] Bot changed or unverified state — discarding saved chatId.`);
+                return null;
+            }
             if (data.chatId) {
                 console.log(`[TelegramAdapter] Restored chatId from state: ${data.chatId}`);
                 return data.chatId;
@@ -146,7 +159,7 @@ export class TelegramAdapter extends IAdapter {
         if (!this.stateFile) return;
         try {
             mkdirSync(dirname(this.stateFile), { recursive: true });
-            writeFileSync(this.stateFile, JSON.stringify({ chatId }), 'utf8');
+            writeFileSync(this.stateFile, JSON.stringify({ botId: this.botInfo?.id, chatId }), 'utf8');
         } catch (err) {
             console.error('[TelegramAdapter] Failed to save state:', err.message);
         }
@@ -203,6 +216,9 @@ export class TelegramAdapter extends IAdapter {
                     
                     // Ignore self
                     if (this.botInfo && msg.from?.id === this.botInfo.id) continue;
+
+                    // Allowlist — silently drop messages from non-approved users
+                    if (this.allowedUserIds && !this.allowedUserIds.has(String(msg.from?.id))) continue;
 
                     const text = msg.text || msg.caption || '';
                     const voice = msg.voice || msg.audio;

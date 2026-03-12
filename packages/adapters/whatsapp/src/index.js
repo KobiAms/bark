@@ -33,15 +33,18 @@ export class WhatsAppAdapter extends IAdapter {
         super();
         this.groupName = config.groupName;
         if (!this.groupName) throw new Error('[WhatsAppAdapter] requires config.groupName');
-        
+
         this.client = null;
         this.groupChat = null;
         this.waState = 'disconnected'; // 'disconnected' | 'waiting_qr' | 'connected'
         this.latestQrDataUrl = null;
         this.msgCache = new Map();
-        
+
         this.messageCb = null;
         this.errorCb = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 5000; // 5 seconds
     }
 
     async start() {
@@ -95,6 +98,27 @@ export class WhatsAppAdapter extends IAdapter {
             console.log('[WhatsAppAdapter] Disconnected:', reason);
             this.waState = 'disconnected';
             this.groupChat = null;
+
+            // Attempt automatic reconnection
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnectAttempts++;
+                console.log(`[WhatsAppAdapter] Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms...`);
+                setTimeout(() => {
+                    console.log('[WhatsAppAdapter] Attempting to reconnect...');
+                    this.client.initialize().catch(e => {
+                        console.error('[WhatsAppAdapter] Reconnection failed:', e.message);
+                    });
+                }, this.reconnectDelay);
+            } else {
+                console.error('[WhatsAppAdapter] Max reconnection attempts reached. Manual intervention may be needed.');
+            }
+        });
+
+        // Catch unhandled client errors to prevent process crash
+        this.client.on('error', (error) => {
+            console.error('[WhatsAppAdapter] Client error:', error);
+            this.waState = 'disconnected';
+            if (this.errorCb) this.errorCb({ error });
         });
 
         return new Promise((resolve, reject) => {
@@ -111,6 +135,7 @@ export class WhatsAppAdapter extends IAdapter {
                 settled = true;
                 clearTimeout(timeout);
                 console.log('[WhatsAppAdapter] Client ready');
+                this.reconnectAttempts = 0; // Reset reconnection counter on successful connect
 
                 const chats = await this.client.getChats();
                 this.groupChat = chats.find(c => c.isGroup && c.name === this.groupName);
@@ -128,7 +153,7 @@ export class WhatsAppAdapter extends IAdapter {
                     if (!this.processInboundMessage) return;
                     await this.processInboundMessage(msg);
                 });
-                
+
                 resolve();
             });
 

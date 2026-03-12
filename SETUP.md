@@ -51,8 +51,10 @@ Create `.env.local.<adapters>-<drivers>` at the project root (already git-ignore
 
 Use `.env.example` as the template — include only the variables needed for the selected adapters, keeping its comments intact as they explain how to get each value.
 
+If Telegram is selected, always include `TELEGRAM_ALLOWED_USER_IDS` — it is required for security. Explain to the user that without it the bot is open to anyone on Telegram. They can get their user ID by messaging `@userinfobot` on Telegram.
+
 After writing the file, tell the user:
-> "Open `.env.local.<name>` and fill in your credentials. The comments explain where to get each value. Come back and say **done** when ready."
+> "Open `.env.local.<name>` and fill in your credentials. The comments explain where to get each value. For Telegram, make sure to fill in `TELEGRAM_ALLOWED_USER_IDS` — message `@userinfobot` on Telegram to get your user ID. Come back and say **done** when ready."
 
 ---
 

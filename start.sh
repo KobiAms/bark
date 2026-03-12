@@ -36,11 +36,11 @@ while true; do
     fi
 
     if [ $EXIT_CODE -eq 0 ]; then
-        echo "🔄 Bark exited cleanly. Restarting in 2s..."
+        echo "🔄 Bark exited cleanly (code 0). This shouldn't happen. Restarting in 2s..."
+        sleep 2
     else
         echo "💥 Bark crashed (code $EXIT_CODE). Restarting in 3s..."
+        # Give Chromium/WhatsApp time to fully release the auth dir lock
+        sleep 3
     fi
-
-    # Give Chromium/WhatsApp time to fully release the auth dir lock
-    sleep 2
 done

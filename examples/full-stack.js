@@ -11,6 +11,17 @@ import { WhatsAppAdapter } from '@bark/adapter-whatsapp';
 import { WhisperPlugin } from '@bark/plugin-speech-whisper';
 
 async function main() {
+    // Prevent silent process exits from unhandled errors
+    process.on('uncaughtException', (err) => {
+        console.error('[FATAL] Uncaught exception:', err);
+        process.exit(1);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('[FATAL] Unhandled rejection at', promise, 'reason:', reason);
+        process.exit(1);
+    });
+
     console.log('Initializing Bark Core...');
     const bark = new BarkCore();
 
@@ -34,6 +45,7 @@ async function main() {
         bark.useAdapter('telegram', new TelegramAdapter({
             token: process.env.TELEGRAM_TOKEN,
             stateFile: path.join(dbDir, 'telegram-state.json'),
+            allowedUserIds: process.env.TELEGRAM_ALLOWED_USER_IDS?.split(','),
         }));
     }
 
