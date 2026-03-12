@@ -1,7 +1,41 @@
 import { IDriver } from '@bark/core';
 import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
+import { writeFileSync, mkdtempSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import { parseLine, buildProgressText } from './parser.js';
+
+// Test file generators
+function generateTestImage() {
+    const filename = `test-${Date.now()}.png`;
+    const filepath = join(mkdtempSync(join(tmpdir(), 'bark-test-')), filename);
+    const pngHeader = Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C,
+        0x49, 0x44, 0x41, 0x54, 0x08, 0x99, 0x01, 0x01, 0x00, 0x00, 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x02,
+        0x00, 0x01, 0x49, 0xB4, 0xE8, 0xB7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
+    ]);
+    writeFileSync(filepath, pngHeader);
+    return { filePath: filepath, mimeType: 'image/png', fileName: filename, caption: '🎨 Test image!' };
+}
+
+function generateTestPdf() {
+    const filename = `test-${Date.now()}.txt`;
+    const filepath = join(mkdtempSync(join(tmpdir(), 'bark-test-')), filename);
+    const content = `Test File from Bark\n===================\n\nGenerated at: ${new Date().toISOString()}\n\nThis demonstrates the FILE_READY event pipeline!\n`;
+    writeFileSync(filepath, content, 'utf8');
+    return { filePath: filepath, mimeType: 'text/plain', fileName: filename, caption: '📄 Test document!' };
+}
+
+function generateTestChart() {
+    const filename = `chart-${Date.now()}.txt`;
+    const filepath = join(mkdtempSync(join(tmpdir(), 'bark-test-')), filename);
+    const chart = `Performance Metrics\n===================\n\nSystem Load:  ████████░░ 80%\nMemory:       ██████░░░░ 60%\nDisk I/O:     ███████░░░ 70%\nNetwork:      ██████████ 100%\n`;
+    writeFileSync(filepath, chart, 'utf8');
+    return { filePath: filepath, mimeType: 'text/plain', fileName: filename, caption: '📊 Performance chart!' };
+}
 
 export class ClaudeCodeDriver extends IDriver {
     /**
@@ -18,6 +52,7 @@ export class ClaudeCodeDriver extends IDriver {
         this.progressCb = null;
         this.errorCb = null;
         this.completeCb = null;
+        this.fileReadyCb = null;
 
         this.activeProcesses = new Map(); // sessionId -> ChildProcess
         this.killedSessions = new Set();
@@ -37,6 +72,40 @@ export class ClaudeCodeDriver extends IDriver {
     }
 
     async sendCommand(sessionId, cmd, systemPrompt, model, driverState = {}) {
+        // Test commands for file delivery demo
+        if (cmd.trim().toLowerCase() === 'send image' || cmd.trim().toLowerCase() === 'send file') {
+            const fileData = generateTestImage();
+            if (this.fileReadyCb) {
+                this.fileReadyCb({ sessionId, ...fileData });
+            }
+            if (this.completeCb) {
+                this.completeCb({ sessionId, result: 'Image generated and sent! 🖼️' });
+            }
+            return;
+        }
+
+        if (cmd.trim().toLowerCase() === 'send chart') {
+            const fileData = generateTestChart();
+            if (this.fileReadyCb) {
+                this.fileReadyCb({ sessionId, ...fileData });
+            }
+            if (this.completeCb) {
+                this.completeCb({ sessionId, result: 'Chart generated and sent! 📊' });
+            }
+            return;
+        }
+
+        if (cmd.trim().toLowerCase() === 'send document') {
+            const fileData = generateTestPdf();
+            if (this.fileReadyCb) {
+                this.fileReadyCb({ sessionId, ...fileData });
+            }
+            if (this.completeCb) {
+                this.completeCb({ sessionId, result: 'Document generated and sent! 📄' });
+            }
+            return;
+        }
+
         if (this.activeProcesses.has(sessionId)) {
             if (this.errorCb) this.errorCb({ sessionId, error: new Error('Agent is already busy') });
             return;
@@ -194,8 +263,9 @@ export class ClaudeCodeDriver extends IDriver {
         }
     }
 
-    onStream(cb)    { this.streamCb = cb; }
-    onProgress(cb)  { this.progressCb = cb; }
-    onError(cb)     { this.errorCb = cb; }
-    onComplete(cb)  { this.completeCb = cb; }
+    onStream(cb)     { this.streamCb = cb; }
+    onProgress(cb)   { this.progressCb = cb; }
+    onError(cb)      { this.errorCb = cb; }
+    onComplete(cb)   { this.completeCb = cb; }
+    onFileReady(cb)  { this.fileReadyCb = cb; }
 }
