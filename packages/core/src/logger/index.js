@@ -6,10 +6,4 @@ export class ConsoleLogger {
     error(...args) { console.error(`[${_ts()}]`, ...args); }
 }
 
-export class SilentLogger {
-    log()   {}
-    warn()  {}
-    error() {}
-}
-
 export const defaultLogger = new ConsoleLogger();

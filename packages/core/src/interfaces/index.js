@@ -328,24 +328,15 @@ export class IPlugin {
  */
 export const EventTypes = {
     // Inbound message pipeline
-    MESSAGE_RECEIVED:           'message.received',           // raw from adapter
-    MESSAGE_RECEIVED_TEXT:      'message.received.text',      // guaranteed text
-    MESSAGE_RECEIVED_ENRICHED:  'message.received.enriched',  // text + context
-
-    // File delivery pipeline
-    FILE_READY:                 'file.ready',                 // file from driver output
-    FILE_READY_PDF:             'file.ready.pdf',             // converted to PDF
+    MESSAGE_RECEIVED:           'message.received',
+    MESSAGE_RECEIVED_TEXT:      'message.received.text',
 
     // Driver streaming
     STREAM_CHUNK:               'stream.chunk',
     STREAM_PROGRESS:            'stream.progress',
     DRIVER_COMPLETE:            'driver.complete',
-    DRIVER_COMPLETE_INDEXED:    'driver.complete.indexed',    // after vector indexing
-    DRIVER_THINKING:            'driver.thinking',
 
     // System
-    COMMAND_COMPLETE:           'command.complete',
     CORE_STARTED:               'core.started',
     CORE_STOPPED:               'core.stopped',
-    ERROR_OCCURRED:             'error.occurred',
 };

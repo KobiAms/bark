@@ -1,29 +1,6 @@
-/**
- * Codex CLI JSON stream parser.
- */
+import { toolIcon, buildProgressText } from '@bark/driver-shared';
 
-const TOOL_ICONS = {
-    Bash: '💻',
-    Read: '📖',
-    Edit: '✏️',
-    Write: '📝',
-    Grep: '🔍',
-    Glob: '📂',
-    WebFetch: '🌐',
-    WebSearch: '🌐',
-    Skill: '⚡',
-    Task: '🔀',
-    command_execution: '💻',
-    shell: '💻',
-};
-
-function toolIcon(name = '') {
-    if (TOOL_ICONS[name]) return TOOL_ICONS[name];
-    for (const [key, icon] of Object.entries(TOOL_ICONS)) {
-        if (name.toLowerCase().includes(key.toLowerCase())) return icon;
-    }
-    return '🔧';
-}
+export { buildProgressText };
 
 export function parseLine(line) {
     if (!line.trim()) return null;
@@ -80,26 +57,4 @@ export function parseLine(line) {
     } catch {
         return null;
     }
-}
-
-export function buildProgressText(progressText, tools) {
-    const lines = [];
-    const previewLen = 300;
-
-    if (progressText) {
-        const isTruncated = progressText.length > previewLen;
-        let preview = progressText.slice(-previewLen).trim().replace(/\n/g, ' ');
-        if (isTruncated) {
-            const firstSpace = preview.indexOf(' ');
-            if (firstSpace > 0) preview = preview.substring(firstSpace + 1);
-            preview = '…' + preview;
-        }
-        lines.push(`_${preview}_`);
-    }
-
-    if (tools.length > 0) {
-        lines.push(tools.slice(-5).map(t => `${toolIcon(t.name)} ${t.name}`).join(' → '));
-    }
-
-    return lines.length > 0 ? lines.join('\n') : '_thinking..._';
 }

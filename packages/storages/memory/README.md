@@ -1,1 +1,0 @@
-# @bark/storage-memory\n\nIn-memory default storage plugin for Bark\n\nSee the [root README](../../README.md) for full documentation and architecture details.

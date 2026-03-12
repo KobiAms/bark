@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "type": "module",
   "dependencies": {
-    "@bark/core": "*"
+    "@bark/core": "*",
+    "@bark/driver-shared": "*"
   }
 }

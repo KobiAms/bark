@@ -13,7 +13,7 @@ export class CompactCommand extends ICommand {
         };
     }
 
-    async execute({ sessionId, registry, eventBus }) {
+    async execute({ registry }) {
         const storage = registry.getStorage();
         const agentRegistry = registry.getAgentRegistry();
 
@@ -37,19 +37,8 @@ export class CompactCommand extends ICommand {
             }
         }
 
-        const message = compacted > 0
+        return compacted > 0
             ? `🧹 Compacted ${compacted} file${compacted > 1 ? 's' : ''}`
             : '⚠️ No storage to compact';
-
-        eventBus.publish({
-            type: 'stream.chunk',
-            sessionId,
-            chunk: message
-        });
-        eventBus.publish({
-            type: 'command.complete',
-            sessionId,
-            result: message
-        });
     }
 }

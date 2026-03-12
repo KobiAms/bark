@@ -6,6 +6,6 @@
   "type": "module",
   "dependencies": {
     "@bark/core": "*",
-    "node-pty": "^1.1.0"
+    "@bark/driver-shared": "*"
   }
 }

@@ -1,0 +1,7 @@
+{
+  "name": "@bark/driver-shared",
+  "version": "1.0.0",
+  "description": "Shared utilities for Bark drivers (progress text, tool icons)",
+  "main": "src/index.js",
+  "type": "module"
+}

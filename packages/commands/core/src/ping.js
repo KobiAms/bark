@@ -9,8 +9,7 @@ export class PingCommand extends ICommand {
         return { usage: '/ping', description: 'Health check', group: 'System' };
     }
 
-    async execute({ sessionId, eventBus }) {
-        eventBus.publish({ type: 'stream.chunk', sessionId, chunk: 'Pong! 🏓' });
-        eventBus.publish({ type: 'command.complete', sessionId, result: 'Pong! 🏓' });
+    async execute() {
+        return 'Pong! 🏓';
     }
 }
