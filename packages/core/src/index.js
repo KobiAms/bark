@@ -108,6 +108,15 @@ export class BarkCore {
         return this;
     }
 
+    /**
+     * Set the default driver for unrouted messages.
+     * @param {string} name 
+     */
+    setDefaultDriver(name) {
+        this.router.setDefaultDriver(name);
+        return this;
+    }
+
     useLogger(logger) {
         this.logger = logger;
         return this;

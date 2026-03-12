@@ -92,7 +92,7 @@ export class MessageRouter {
             const agentName = sessionId.split(':')[0];
             return `*@${agentName}*\n\n`;
         }
-        return '';
+        return '*@bark*\n\n';
     }
 
     _getAdapterAndReplyTo(sessionId) {
@@ -211,6 +211,12 @@ export class MessageRouter {
                 targetModel = agent.model || null;
                 targetPayload = trimmedPayload;
             }
+        }
+
+        if (!targetAgentName) {
+            const helpCmd = await this.commandDispatcher.dispatch(event.sessionId, '/help', event.adapterName);
+            const agentsCmd = await this.commandDispatcher.dispatch(event.sessionId, '/agents', event.adapterName);
+            targetSystemPrompt = `You are Bark, the Orchestrator. The user is asking to manage the system. If their request maps to a command, reply with ONLY the exact slash command (e.g., /new ...). If they just want to talk to an agent but forgot to mention them, explain how to use @agent_name.\n\nAvailable commands:\n${helpCmd.result}\n\nCurrent agents:\n${agentsCmd.result}`;
         }
 
         return { targetAgentName, targetDriverName, targetSystemPrompt, targetModel, targetPayload };
@@ -346,7 +352,26 @@ export class MessageRouter {
         }
 
         const prefix = this._getAgentPrefix(event.sessionId);
-        const result = prefix + (event.result.trim() || 'Done.');
+        const resultText = event.result.trim();
+
+        if (!event.sessionId.includes(':') && resultText.startsWith('/')) {
+            const intermediateUX = `${prefix}_on it..._\n\n⚙️ Executing: \`${resultText}\``;
+            await this._editOrSend(event.sessionId, intermediateUX);
+
+            const r = this._getAdapterAndReplyTo(event.sessionId);
+            const cmd = await this.commandDispatcher.dispatch(event.sessionId, resultText, r?.adapterName);
+            
+            if (cmd.handled) {
+                const finalUX = `${prefix}_on it..._\n\n⚙️ Executing: \`${resultText}\`\n\n${typeof cmd.result === 'string' ? cmd.result : '✅ Done'}`;
+                await this._editOrSend(event.sessionId, finalUX);
+            } else {
+                const finalUX = `${prefix}_on it..._\n\n⚙️ Executing: \`${resultText}\`\n\n❌ Command not recognized.`;
+                await this._editOrSend(event.sessionId, finalUX);
+            }
+            return;
+        }
+
+        const result = prefix + (resultText || 'Done.');
 
         const sentMessageId = await this._editOrSend(event.sessionId, result);
 

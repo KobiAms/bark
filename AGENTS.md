@@ -33,3 +33,4 @@ yarn start             # run with auto-restart via start.sh
 - Each package has zero external deps except `@bark/core` and platform-specific libs
 - Drivers wrap a CLI subprocess (node-pty or spawn) — never call APIs directly
 - Storage and adapters are pluggable; never hardcode them in packages
+- Run tests once using `yarn test --run` (or `CI=true yarn test`) to avoid watch mode staying alive in the background.
