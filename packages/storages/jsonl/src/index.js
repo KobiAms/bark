@@ -137,7 +137,7 @@ export class JsonlAgentRegistry extends IAgentRegistry {
             if (!line.trim()) continue;
             try {
                 const entry = JSON.parse(line);
-                const name = entry.name?.toLowerCase();
+                const name = this._normalizeName(entry.name);
                 if (!name) continue;
                 if (entry.deleted) {
                     this.agents.delete(name);
@@ -151,28 +151,35 @@ export class JsonlAgentRegistry extends IAgentRegistry {
         this.initialized = true;
     }
 
+    _normalizeName(name) {
+        return name?.toLowerCase() ?? null;
+    }
+
     async getAgent(name) {
         await this._ensureInitialized();
-        const lowerName = name?.toLowerCase();
-        const config = this.agents.get(lowerName);
-        return config ? { name: lowerName, ...config } : null;
+        const key = this._normalizeName(name);
+        if (!key) return null;
+        const config = this.agents.get(key);
+        return config ? { name: key, ...config } : null;
     }
 
     async saveAgent(name, config) {
         await this._ensureInitialized();
-        const lowerName = name?.toLowerCase();
-        this.agents.set(lowerName, config);
+        const key = this._normalizeName(name);
+        if (!key) return;
+        this.agents.set(key, config);
         if (this.filePath) {
-            await fsPromises.appendFile(this.filePath, JSON.stringify({ name: lowerName, config, timestamp: Date.now() }) + '\n');
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ name: key, config, timestamp: Date.now() }) + '\n');
         }
     }
 
     async deleteAgent(name) {
         await this._ensureInitialized();
-        const lowerName = name?.toLowerCase();
-        this.agents.delete(lowerName);
+        const key = this._normalizeName(name);
+        if (!key) return;
+        this.agents.delete(key);
         if (this.filePath) {
-            await fsPromises.appendFile(this.filePath, JSON.stringify({ name: lowerName, deleted: true, timestamp: Date.now() }) + '\n');
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ name: key, deleted: true, timestamp: Date.now() }) + '\n');
         }
     }
 

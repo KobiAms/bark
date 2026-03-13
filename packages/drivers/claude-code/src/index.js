@@ -62,7 +62,8 @@ export class ClaudeCodeDriver extends IDriver {
             isResume ? '--resume' : '--session-id', nativeSessionId,
             '--model', model || this.model,
             '--output-format', 'stream-json',
-            '--verbose'
+            '--verbose',
+            '--include-partial-messages'
         ];
 
         const activeSystemPrompt = sessionSystemPrompt || this.systemPrompt;
@@ -126,7 +127,7 @@ export class ClaudeCodeDriver extends IDriver {
                             break;
 
                         case 'result':
-                            finalResult = event.text || textContent;
+                            finalResult = event.text != null && event.text !== '' ? event.text : textContent;
                             resultError = event.isError;
                             break;
                     }
@@ -156,7 +157,7 @@ export class ClaudeCodeDriver extends IDriver {
                 if (buffer.trim()) {
                     const event = parseLine(buffer.trim());
                     if (event?.type === 'result') {
-                        finalResult = event.text;
+                        finalResult = event.text != null && event.text !== '' ? event.text : textContent;
                         resultError = event.isError;
                     }
                 }

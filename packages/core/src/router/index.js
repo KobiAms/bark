@@ -63,8 +63,7 @@ export class MessageRouter {
                 progressTimer: null,
                 flushCount: 0,
                 thinkingStartTime: null,
-                inFlightEdit: null,
-                streamedText: ''
+                inFlightEdit: null
             });
         }
         return this.contexts.get(sessionId);
@@ -270,8 +269,6 @@ export class MessageRouter {
         );
 
         const ctx = this._getContext(event.sessionId);
-        ctx.streamedText += event.chunk;
-
         if (!ctx.progressTimer && ctx.liveMessageId) {
             this._flushProgress(event.sessionId);
             ctx.progressTimer = setInterval(() => this._flushProgress(event.sessionId), EDIT_THROTTLE_MS);
@@ -311,7 +308,6 @@ export class MessageRouter {
         const body = ProgressFormatter.format({
             prefix: this._getAgentPrefix(sessionId),
             progressText: ctx.pendingProgress,
-            streamedText: ctx.streamedText,
             flushCount: ctx.flushCount,
             thinkingStartTime: ctx.thinkingStartTime
         });
@@ -329,7 +325,6 @@ export class MessageRouter {
             ctx.pendingProgress = null;
             ctx.flushCount = 0;
             ctx.thinkingStartTime = null;
-            ctx.streamedText = '';
         }
     }
 
