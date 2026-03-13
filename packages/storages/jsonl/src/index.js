@@ -137,10 +137,12 @@ export class JsonlAgentRegistry extends IAgentRegistry {
             if (!line.trim()) continue;
             try {
                 const entry = JSON.parse(line);
+                const name = entry.name?.toLowerCase();
+                if (!name) continue;
                 if (entry.deleted) {
-                    this.agents.delete(entry.name);
+                    this.agents.delete(name);
                 } else {
-                    this.agents.set(entry.name, entry.config);
+                    this.agents.set(name, entry.config);
                 }
             } catch (err) {
                 this.logger.warn(`[JsonlAgentRegistry] Failed to parse line: ${err.message}`);
@@ -151,23 +153,26 @@ export class JsonlAgentRegistry extends IAgentRegistry {
 
     async getAgent(name) {
         await this._ensureInitialized();
-        const config = this.agents.get(name);
-        return config ? { name, ...config } : null;
+        const lowerName = name?.toLowerCase();
+        const config = this.agents.get(lowerName);
+        return config ? { name: lowerName, ...config } : null;
     }
 
     async saveAgent(name, config) {
         await this._ensureInitialized();
-        this.agents.set(name, config);
+        const lowerName = name?.toLowerCase();
+        this.agents.set(lowerName, config);
         if (this.filePath) {
-            await fsPromises.appendFile(this.filePath, JSON.stringify({ name, config, timestamp: Date.now() }) + '\n');
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ name: lowerName, config, timestamp: Date.now() }) + '\n');
         }
     }
 
     async deleteAgent(name) {
         await this._ensureInitialized();
-        this.agents.delete(name);
+        const lowerName = name?.toLowerCase();
+        this.agents.delete(lowerName);
         if (this.filePath) {
-            await fsPromises.appendFile(this.filePath, JSON.stringify({ name, deleted: true, timestamp: Date.now() }) + '\n');
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ name: lowerName, deleted: true, timestamp: Date.now() }) + '\n');
         }
     }
 

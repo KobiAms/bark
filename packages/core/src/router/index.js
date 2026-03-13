@@ -120,7 +120,6 @@ export class MessageRouter {
 
         const ctx = this._getContext(effectiveSessionId);
         const messageId = ctx.liveMessageId;
-        ctx.liveMessageId = null;
         this._clearProgressTimer(effectiveSessionId);
 
         if (ctx.inFlightEdit) {
@@ -129,11 +128,13 @@ export class MessageRouter {
         }
 
         if (messageId) {
+            ctx.liveMessageId = null;
             await r.adapter.editMessage(r.replyTo, messageId, text).catch(async () => {
                 await r.adapter.sendMessage(r.replyTo, text, { replyToMessageId: r.lastMessageId }).catch(() => {});
             });
             return messageId;
         } else {
+            ctx.liveMessageId = null;
             const sent = await r.adapter.sendMessage(r.replyTo, text, { replyToMessageId: r.lastMessageId }).catch(() => null);
             return sent?.messageId || null;
         }
@@ -352,11 +353,12 @@ export class MessageRouter {
         }
 
         const prefix = this._getAgentPrefix(event.sessionId);
-        const resultText = event.result.trim();
+        const resultText = event.result.trim().replace(/^`+|`+$/g, '').trim();
 
         if (!event.sessionId.includes(':') && resultText.startsWith('/')) {
             const intermediateUX = `${prefix}_on it..._\n\n⚙️ Executing: \`${resultText}\``;
-            await this._editOrSend(event.sessionId, intermediateUX);
+            const editedId = await this._editOrSend(event.sessionId, intermediateUX);
+            if (editedId) this._getContext(event.sessionId).liveMessageId = editedId;
 
             const r = this._getAdapterAndReplyTo(event.sessionId);
             const cmd = await this.commandDispatcher.dispatch(event.sessionId, resultText, r?.adapterName);
