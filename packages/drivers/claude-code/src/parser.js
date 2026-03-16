@@ -25,15 +25,6 @@ export function parseLine(line) {
             }
         }
 
-        if (data.type === 'assistant') {
-            const contents = data.message?.content || [];
-            for (const content of contents) {
-                if (content.type === 'text') {
-                    return { type: 'text', text: content.text };
-                }
-            }
-        }
-
         if (data.type === 'result') {
             return { type: 'result', text: data.result || '', isError: !!data.is_error };
         }

@@ -62,7 +62,8 @@ export class ClaudeCodeDriver extends IDriver {
             isResume ? '--resume' : '--session-id', nativeSessionId,
             '--model', model || this.model,
             '--output-format', 'stream-json',
-            '--verbose'
+            '--verbose',
+            '--include-partial-messages'
         ];
 
         const activeSystemPrompt = sessionSystemPrompt || this.systemPrompt;
@@ -86,6 +87,8 @@ export class ClaudeCodeDriver extends IDriver {
 
         // Progress state — accumulated per-session for buildProgressText
         let progressText = '';
+        // Text-only accumulator (excludes thinking) for final result
+        let textContent = '';
         const tools = [];
 
         return new Promise((resolve, reject) => {
@@ -101,6 +104,7 @@ export class ClaudeCodeDriver extends IDriver {
                     switch (event.type) {
                         case 'text':
                             if (this.streamCb) this.streamCb({ sessionId, chunk: event.text });
+                            textContent += event.text;
                             progressText += event.text;
                             if (this.progressCb) {
                                 this.progressCb({ sessionId, progressText: buildProgressText(progressText, tools) });
@@ -123,7 +127,7 @@ export class ClaudeCodeDriver extends IDriver {
                             break;
 
                         case 'result':
-                            finalResult = event.text;
+                            finalResult = event.text != null && event.text !== '' ? event.text : textContent;
                             resultError = event.isError;
                             break;
                     }
@@ -153,7 +157,7 @@ export class ClaudeCodeDriver extends IDriver {
                 if (buffer.trim()) {
                     const event = parseLine(buffer.trim());
                     if (event?.type === 'result') {
-                        finalResult = event.text;
+                        finalResult = event.text != null && event.text !== '' ? event.text : textContent;
                         resultError = event.isError;
                     }
                 }

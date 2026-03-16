@@ -137,10 +137,12 @@ export class JsonlAgentRegistry extends IAgentRegistry {
             if (!line.trim()) continue;
             try {
                 const entry = JSON.parse(line);
+                const name = this._normalizeName(entry.name);
+                if (!name) continue;
                 if (entry.deleted) {
-                    this.agents.delete(entry.name);
+                    this.agents.delete(name);
                 } else {
-                    this.agents.set(entry.name, entry.config);
+                    this.agents.set(name, entry.config);
                 }
             } catch (err) {
                 this.logger.warn(`[JsonlAgentRegistry] Failed to parse line: ${err.message}`);
@@ -149,25 +151,35 @@ export class JsonlAgentRegistry extends IAgentRegistry {
         this.initialized = true;
     }
 
+    _normalizeName(name) {
+        return name?.toLowerCase() ?? null;
+    }
+
     async getAgent(name) {
         await this._ensureInitialized();
-        const config = this.agents.get(name);
-        return config ? { name, ...config } : null;
+        const key = this._normalizeName(name);
+        if (!key) return null;
+        const config = this.agents.get(key);
+        return config ? { name: key, ...config } : null;
     }
 
     async saveAgent(name, config) {
         await this._ensureInitialized();
-        this.agents.set(name, config);
+        const key = this._normalizeName(name);
+        if (!key) return;
+        this.agents.set(key, config);
         if (this.filePath) {
-            await fsPromises.appendFile(this.filePath, JSON.stringify({ name, config, timestamp: Date.now() }) + '\n');
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ name: key, config, timestamp: Date.now() }) + '\n');
         }
     }
 
     async deleteAgent(name) {
         await this._ensureInitialized();
-        this.agents.delete(name);
+        const key = this._normalizeName(name);
+        if (!key) return;
+        this.agents.delete(key);
         if (this.filePath) {
-            await fsPromises.appendFile(this.filePath, JSON.stringify({ name, deleted: true, timestamp: Date.now() }) + '\n');
+            await fsPromises.appendFile(this.filePath, JSON.stringify({ name: key, deleted: true, timestamp: Date.now() }) + '\n');
         }
     }
 
