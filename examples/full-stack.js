@@ -6,7 +6,7 @@ import { OpenCodeDriver } from '@bark/driver-opencode';
 import { CursorDriver } from '@bark/driver-cursor';
 import { JsonlStorage, JsonlAgentRegistry } from '@bark/storage-jsonl';
 import path from 'path';
-import { HelpCommand, PingCommand, SwitchDriverCommand, NewCommand, DeleteCommand, ListAgentsCommand, RestartCommand, StopCommand, ClearCommand, ModelsCommand } from '@bark/commands-core';
+import { coreCommands } from '@bark/commands-core';
 import { TelegramAdapter } from '@bark/adapter-telegram';
 import { WhatsAppAdapter } from '@bark/adapter-whatsapp';
 import { WhisperPlugin } from '@bark/plugin-speech-whisper';
@@ -56,16 +56,7 @@ async function main() {
     }
 
     // 4. Commands
-    bark.useCommand(new HelpCommand());
-    bark.useCommand(new PingCommand());
-    bark.useCommand(new SwitchDriverCommand());
-    bark.useCommand(new StopCommand());
-    bark.useCommand(new ClearCommand());
-    bark.useCommand(new NewCommand());
-    bark.useCommand(new DeleteCommand());
-    bark.useCommand(new ListAgentsCommand());
-    bark.useCommand(new RestartCommand());
-    bark.useCommand(new ModelsCommand());
+    for (const cmd of coreCommands) bark.useCommand(cmd);
 
     // Graceful shutdown — guard against double-firing (SIGINT + SIGTERM both arrive on Ctrl+C)
     let stopping = false;
