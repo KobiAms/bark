@@ -151,6 +151,35 @@ export class MessageRouter {
         }
     }
 
+    async _resolveTargetAgentName(event) {
+        const { payload } = event;
+        const agentRegistry = this.registry.getAgentRegistry();
+        const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
+
+        if (trimmedPayload.startsWith('@')) {
+            const rawName = trimmedPayload.split(/\s+/)[0].substring(1);
+            if (agentRegistry && rawName.toLowerCase() !== 'bark') {
+                const agent = await agentRegistry.getAgent(rawName);
+                if (agent) return rawName;
+            }
+        }
+
+        if (agentRegistry && event.quotedMessageMetadata?.messageId) {
+            const agentName = await this._getMessageAgent(event.quotedMessageMetadata.messageId);
+            if (agentName) {
+                const agent = await agentRegistry.getAgent(agentName);
+                if (agent) return agentName;
+            }
+        }
+
+        if (agentRegistry && event.quotedMessageMetadata?.senderName) {
+            const agent = await agentRegistry.getAgent(event.quotedMessageMetadata.senderName);
+            if (agent) return event.quotedMessageMetadata.senderName;
+        }
+
+        return null;
+    }
+
     async _resolveRouting(event) {
         const { payload } = event;
         const agentRegistry = this.registry.getAgentRegistry();
@@ -167,7 +196,11 @@ export class MessageRouter {
             const parts = trimmedPayload.split(/\s+/);
             const rawName = parts[0].substring(1);
 
-            if (agentRegistry) {
+            // @bark is an alias for the default orchestrator — strip the mention and route normally
+            if (rawName.toLowerCase() === 'bark') {
+                const nameIndex = payload.indexOf('@' + rawName);
+                targetPayload = payload.substring(nameIndex + rawName.length + 1).trim();
+            } else if (agentRegistry) {
                 const agent = await agentRegistry.getAgent(rawName);
                 if (agent) {
                     targetAgentName = rawName;
@@ -396,8 +429,9 @@ export class MessageRouter {
         baseCtx.lastMessageId = event.rawId;
 
         try {
-            // 1. Check for commands
-            const cmd = await this.commandDispatcher.dispatch(sessionId, payload, adapterName);
+            // 1. Check for commands (resolve target agent from reply-to first so commands like /stop, /clear can use it)
+            const targetAgentNameForCmd = await this._resolveTargetAgentName(event);
+            const cmd = await this.commandDispatcher.dispatch(sessionId, payload, adapterName, targetAgentNameForCmd);
             if (cmd.handled) {
                 if (typeof cmd.result === 'string') {
                     await this._replyToSender(sessionId, cmd.result);
@@ -417,8 +451,10 @@ export class MessageRouter {
             if (typeof payload === 'string' && payload.trim().startsWith('@') && !targetAgentName) {
                 const parts = payload.trim().split(/\s+/);
                 const rawName = parts[0].substring(1);
-                await this._replyToSender(sessionId, `❓ Unknown agent: @${rawName}`);
-                return;
+                if (rawName.toLowerCase() !== 'bark') {
+                    await this._replyToSender(sessionId, `❓ Unknown agent: @${rawName}`);
+                    return;
+                }
             }
 
             if (targetAgentName && typeof targetPayload === 'string' && !targetPayload.trim()) {

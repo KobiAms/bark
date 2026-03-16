@@ -4,7 +4,7 @@ export class CommandDispatcher {
         this.eventBus = eventBus;
     }
 
-    async dispatch(sessionId, payload, adapterName) {
+    async dispatch(sessionId, payload, adapterName, targetAgentName = null) {
         if (typeof payload !== 'string') return { handled: false };
 
         for (const command of this.registry.getAllCommands()) {
@@ -14,6 +14,7 @@ export class CommandDispatcher {
                     sessionId,
                     payload,
                     adapterName,
+                    targetAgentName,
                     registry: this.registry,
                     eventBus: this.eventBus,
                     storage

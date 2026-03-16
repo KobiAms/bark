@@ -15,9 +15,9 @@ export class StopCommand extends ICommand {
         };
     }
 
-    async execute({ sessionId, payload, registry }) {
+    async execute({ sessionId, payload, registry, targetAgentName }) {
         const match = payload.match(/@(\w+)/);
-        const targetAgent = match ? match[1] : null;
+        const targetAgent = match ? match[1] : targetAgentName;
 
         // Build effective session IDs to kill
         const sessionIdsToKill = [];
