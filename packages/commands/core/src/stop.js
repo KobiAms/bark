@@ -15,9 +15,9 @@ export class StopCommand extends ICommand {
         };
     }
 
-    async execute({ sessionId, payload, registry }) {
+    async execute({ sessionId, payload, registry, targetAgentName }) {
         const match = payload.match(/@(\w+)/);
-        const targetAgent = match ? match[1] : null;
+        const targetAgent = match ? match[1] : targetAgentName;
 
         // Build effective session IDs to kill
         const sessionIdsToKill = [];
@@ -42,8 +42,8 @@ export class StopCommand extends ICommand {
                 try {
                     await driver.kill(sid);
                     killed.push(sid);
-                } catch {
-                    // driver.kill throws/no-ops if session doesn't exist — that's fine
+                } catch (err) {
+                    registry.logger?.trace(`[StopCommand] Failed to kill session ${sid} on driver ${driverName}:`, err);
                 }
             }
         }
