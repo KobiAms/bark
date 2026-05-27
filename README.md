@@ -6,6 +6,7 @@ Bark is a lightweight, framework-agnostic AI agent orchestration engine. It prov
 - **Zero Coupling**: The core engine (`@bark/core`) has no dependencies on specific databases, LLMs, or chat platforms.
 - **Pluggable Architecture**: Everything is an Extension obeying strict interfaces (`IAdapter`, `IDriver`, `IStorage`, `ICommand`).
 - **Bi-Directional Streaming**: Supports real-time text chunk routing through the EventBus architecture.
+- **Project Vision**: Read about our [Inspiration](./INSPIRATION.md), [Feature Parity](./PARITY.md), and [Roadmap](./ROADMAP.md).
 
 ## Packages
 ### Core
