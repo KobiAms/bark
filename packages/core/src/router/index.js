@@ -348,6 +348,11 @@ export class MessageRouter {
         ctx.inFlightEdit = r.adapter.editMessage(r.replyTo, ctx.liveMessageId, body).catch(() => {});
     }
 
+    _cleanupContext(sessionId) {
+        this._clearProgressTimer(sessionId);
+        this.contexts.delete(sessionId);
+    }
+
     _clearProgressTimer(sessionId) {
         const ctx = this.contexts.get(sessionId);
         if (ctx) {
@@ -366,6 +371,7 @@ export class MessageRouter {
 
         if (this.finishedSessions.has(event.sessionId)) {
             this.finishedSessions.delete(event.sessionId);
+            this._cleanupContext(event.sessionId);
             return;
         }
 
@@ -398,6 +404,7 @@ export class MessageRouter {
                 const finalUX = `${prefix}_on it..._\n\n⚙️ Executing: \`${resultText}\`\n\n❌ Command not recognized.`;
                 await this._editOrSend(event.sessionId, finalUX);
             }
+            this._cleanupContext(event.sessionId);
             return;
         }
 
@@ -413,6 +420,8 @@ export class MessageRouter {
                 await this._setMessageAgent(sentMessageId, agentName);
             }
         }
+
+        this._cleanupContext(event.sessionId);
     }
 
     async handleIncomingMessage(event) {
@@ -436,6 +445,7 @@ export class MessageRouter {
                 if (typeof cmd.result === 'string') {
                     await this._replyToSender(sessionId, cmd.result);
                 }
+                this._cleanupContext(sessionId);
                 return;
             }
 
@@ -453,14 +463,16 @@ export class MessageRouter {
                 const rawName = parts[0].substring(1);
                 if (rawName.toLowerCase() !== 'bark') {
                     await this._replyToSender(sessionId, `❓ Unknown agent: @${rawName}`);
+                    this._cleanupContext(sessionId);
                     return;
                 }
             }
 
             if (targetAgentName && typeof targetPayload === 'string' && !targetPayload.trim()) {
-                 const prefix = this._getAgentPrefix(targetAgentName + ':' + sessionId);
-                 await this._replyToSender(sessionId, `${prefix}I am listening! What would you like to ask?`);
-                 return;
+                const prefix = this._getAgentPrefix(`${targetAgentName}:${sessionId}`);
+                await this._replyToSender(sessionId, `${prefix}I'm listening. What's on your mind?`);
+                this._cleanupContext(sessionId);
+                return;
             }
 
             // 3. Session Management
@@ -487,6 +499,8 @@ export class MessageRouter {
             if (!driver) {
                 this.logger.error(`[MessageRouter] Driver '${session.driverName}' not found.`);
                 await this._replyToSender(sessionId, `❌ Driver '${session.driverName}' not found.`);
+                this._cleanupContext(effectiveSessionId);
+                if (effectiveSessionId !== sessionId) this._cleanupContext(sessionId);
                 return;
             }
 
@@ -534,7 +548,8 @@ export class MessageRouter {
                 if (driverError.message === 'Session killed') {
                     this.finishedSessions.add(effectiveSessionId);
                     effCtx.liveMessageId = null;
-                    this._clearProgressTimer(effectiveSessionId);
+                    this._cleanupContext(effectiveSessionId);
+                    if (effectiveSessionId !== sessionId) this._cleanupContext(sessionId);
                     return;
                 }
 
@@ -546,11 +561,14 @@ export class MessageRouter {
                     this.logger.error(`[MessageRouter] Driver error for session ${effectiveSessionId}:`, driverError);
                 }
                 await this._editOrSend(effectiveSessionId, `❌ ${driverError.message}`);
+                this._cleanupContext(effectiveSessionId);
+                if (effectiveSessionId !== sessionId) this._cleanupContext(sessionId);
             }
 
         } catch (error) {
             this.logger.error(`[MessageRouter] Error processing message for session ${sessionId}:`, error);
             await this._replyToSender(sessionId, `❌ ${error.message}`);
+            this._cleanupContext(sessionId);
         }
     }
 }

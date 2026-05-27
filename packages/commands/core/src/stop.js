@@ -42,8 +42,8 @@ export class StopCommand extends ICommand {
                 try {
                     await driver.kill(sid);
                     killed.push(sid);
-                } catch {
-                    // driver.kill throws/no-ops if session doesn't exist — that's fine
+                } catch (err) {
+                    registry.logger?.trace(`[StopCommand] Failed to kill session ${sid} on driver ${driverName}:`, err);
                 }
             }
         }

@@ -22,11 +22,11 @@ export class ClearCommand extends ICommand {
         const effectiveSessionId = targetAgent ? `${targetAgent}:${sessionId}` : sessionId;
 
         // Kill any in-flight process
-        for (const [, driver] of registry.drivers.entries()) {
+        for (const [driverName, driver] of registry.drivers.entries()) {
             try {
                 await driver.kill(effectiveSessionId);
-            } catch {
-                // no-op if session doesn't exist
+            } catch (err) {
+                registry.logger?.trace(`[ClearCommand] Failed to kill session ${effectiveSessionId} on driver ${driverName}:`, err);
             }
         }
 

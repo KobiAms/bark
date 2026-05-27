@@ -7,12 +7,17 @@ export class CommandDispatcher {
     async dispatch(sessionId, payload, adapterName, targetAgentName = null) {
         if (typeof payload !== 'string') return { handled: false };
 
+        let effectivePayload = payload.trim();
+        if (effectivePayload.toLowerCase().startsWith('@bark')) {
+            effectivePayload = effectivePayload.substring(5).trim();
+        }
+
         for (const command of this.registry.getAllCommands()) {
-            if (command.match(payload)) {
+            if (command.match(effectivePayload)) {
                 const storage = this.registry.getStorage();
                 const result = await command.execute({
                     sessionId,
-                    payload,
+                    payload: effectivePayload,
                     adapterName,
                     targetAgentName,
                     registry: this.registry,
