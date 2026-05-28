@@ -43,8 +43,12 @@ export class WhatsAppAdapter extends IAdapter {
         this.messageCb = null;
         this.errorCb = null;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 5000; // 5 seconds
+        this.isReconnecting = false;
+        this.heartbeatInterval = null;
+    }
+
+    _getBackoffDelay(attempt) {
+        return Math.min(5000 * Math.pow(2, attempt - 1), 300_000);
     }
 
     async start() {
