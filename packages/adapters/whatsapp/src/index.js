@@ -135,8 +135,30 @@ export class WhatsAppAdapter extends IAdapter {
     }
 
     _scheduleReconnect() { /* stub — implemented in Task 4 */ }
-    _startHeartbeat() { /* stub — implemented in Task 3 */ }
-    _stopHeartbeat() { /* stub — implemented in Task 3 */ }
+
+    _startHeartbeat() {
+        this._stopHeartbeat(); // clear any existing interval first
+        this.heartbeatInterval = setInterval(async () => {
+            if (this.waState !== 'connected' || this.isReconnecting) return;
+            try {
+                const state = await this.client.getState();
+                if (state !== 'CONNECTED') {
+                    this.logger.log(`[WhatsAppAdapter] Heartbeat: state=${state}, reconnecting...`);
+                    this._scheduleReconnect();
+                }
+            } catch (err) {
+                this.logger.log(`[WhatsAppAdapter] Heartbeat: getState() threw, reconnecting... (${err.message})`);
+                this._scheduleReconnect();
+            }
+        }, 30_000);
+    }
+
+    _stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
 
     async start() {
         if (this.groupName === 'mock') {
