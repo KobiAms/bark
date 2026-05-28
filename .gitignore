@@ -32,7 +32,6 @@ examples/local.*
 # Yarn Berry
 .yarn/
 .yarnrc.yml
-yarn.lock
 
 # Plans / local docs
 docs/
