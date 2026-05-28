@@ -134,7 +134,34 @@ export class WhatsAppAdapter extends IAdapter {
         });
     }
 
-    _scheduleReconnect() { /* stub — implemented in Task 4 */ }
+    _scheduleReconnect() {
+        if (this.isReconnecting) return;
+        this.isReconnecting = true;
+        this.reconnectAttempts++;
+        const delay = this._getBackoffDelay(this.reconnectAttempts);
+        this.logger.log(`[WhatsAppAdapter] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms...`);
+        setTimeout(() => this._doReconnect(), delay);
+    }
+
+    async _doReconnect() {
+        this.logger.log('[WhatsAppAdapter] Executing reconnect: destroy + recreate...');
+        try {
+            await this.client.destroy();
+        } catch { /* old client may already be gone */ }
+
+        this.client = this._createClient();
+        this._setupClientEvents(this.client);
+        clearChromiumLocks('.wwebjs_auth');
+
+        try {
+            await this.client.initialize();
+            // isReconnecting and reconnectAttempts reset in 'ready' handler
+        } catch (err) {
+            this.logger.error('[WhatsAppAdapter] Reconnect initialize failed:', err.message);
+            this.isReconnecting = false;
+            this._scheduleReconnect();
+        }
+    }
 
     _startHeartbeat() {
         this._stopHeartbeat(); // clear any existing interval first
