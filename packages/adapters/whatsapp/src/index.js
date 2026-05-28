@@ -108,14 +108,14 @@ export class WhatsAppAdapter extends IAdapter {
 
         client.on('ready', async () => {
             this.logger.log('[WhatsAppAdapter] Client ready');
-            this.waState = 'connected';
             this.isReconnecting = false;
             this.reconnectAttempts = 0;
 
-            const chats = await this.client.getChats();
+            const chats = await client.getChats();
             this.groupChat = chats.find(c => c.isGroup && c.name === this.groupName);
 
             if (this.groupChat) {
+                this.waState = 'connected';
                 this.logger.log(`[WhatsAppAdapter] Listening on group: "${this.groupChat.name}"`);
             } else {
                 this.logger.warn(`[WhatsAppAdapter] Group "${this.groupName}" not found.`);
@@ -123,7 +123,7 @@ export class WhatsAppAdapter extends IAdapter {
             }
 
             // Wire up inbound message handler
-            this.client.on('message_create', async (msg) => {
+            client.on('message_create', async (msg) => {
                 if (!this.processInboundMessage) return;
                 await this.processInboundMessage(msg).catch(err => {
                     this.logger.error(`[WhatsAppAdapter] Unhandled error in message handler: ${err.message}`);
