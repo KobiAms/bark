@@ -43,21 +43,16 @@ export class WhatsAppAdapter extends IAdapter {
         this.messageCb = null;
         this.errorCb = null;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 5000; // 5 seconds
+        this.isReconnecting = false;
+        this.heartbeatInterval = null;
     }
 
-    async start() {
-        if (this.groupName === 'mock') {
-            this.logger.log('[WhatsAppAdapter] Running in MOCK mode. Bypassing Chromium download.');
-            this.waState = 'connected';
-            this.groupChat = { name: 'mock' };
-            return;
-        }
+    _getBackoffDelay(attempt) {
+        return Math.min(5000 * Math.pow(2, attempt - 1), 300_000);
+    }
 
-        const INIT_TIMEOUT_MS = 120_000;
-
-        this.client = new Client({
+    _createClient() {
+        return new Client({
             authStrategy: new LocalAuth({ dataPath: '.wwebjs_auth' }),
             puppeteer: {
                 headless: true,
@@ -72,8 +67,10 @@ export class WhatsAppAdapter extends IAdapter {
                 ],
             },
         });
+    }
 
-        this.client.on('qr', (qr) => {
+    _setupClientEvents(client) {
+        client.on('qr', (qr) => {
             this.waState = 'waiting_qr';
             this.logger.log('\n[WhatsAppAdapter] QR Code received. Please scan to authenticate.');
             // We could emit a special BarkEvent for QR codes, but for now we just stdout the raw data
@@ -82,44 +79,126 @@ export class WhatsAppAdapter extends IAdapter {
             }).catch(e => this.logger.error('[WhatsAppAdapter] Could not load qrcode-terminal', e));
         });
 
-        this.client.on('authenticated', () => {
+        client.on('authenticated', () => {
             this.logger.log('[WhatsAppAdapter] Authenticated');
             this.waState = 'authenticating';
             this.latestQrDataUrl = null;
         });
 
-        this.client.on('auth_failure', (msg) => {
+        client.on('auth_failure', (msg) => {
             this.logger.error(`[WhatsAppAdapter] Auth failed: ${msg}`);
             this.waState = 'disconnected';
             if (this.errorCb) this.errorCb({ error: new Error(`WhatsApp Auth Blocked: ${msg}`) });
         });
 
-        this.client.on('disconnected', (reason) => {
+        client.on('disconnected', (reason) => {
             this.logger.log('[WhatsAppAdapter] Disconnected:', reason);
             this.waState = 'disconnected';
             this.groupChat = null;
-
-            // Attempt automatic reconnection
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                this.reconnectAttempts++;
-                this.logger.log(`[WhatsAppAdapter] Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms...`);
-                setTimeout(() => {
-                    this.logger.log('[WhatsAppAdapter] Attempting to reconnect...');
-                    this.client.initialize().catch(e => {
-                        this.logger.error('[WhatsAppAdapter] Reconnection failed:', e.message);
-                    });
-                }, this.reconnectDelay);
-            } else {
-                this.logger.error('[WhatsAppAdapter] Max reconnection attempts reached. Manual intervention may be needed.');
-            }
+            this._stopHeartbeat();
+            this._scheduleReconnect();
         });
 
         // Catch unhandled client errors to prevent process crash
-        this.client.on('error', (error) => {
+        client.on('error', (error) => {
             this.logger.error('[WhatsAppAdapter] Client error:', error);
             this.waState = 'disconnected';
             if (this.errorCb) this.errorCb({ error });
         });
+
+        client.on('ready', async () => {
+            this.logger.log('[WhatsAppAdapter] Client ready');
+            this.isReconnecting = false;
+            this.reconnectAttempts = 0;
+
+            const chats = await client.getChats();
+            this.groupChat = chats.find(c => c.isGroup && c.name === this.groupName);
+
+            if (this.groupChat) {
+                this.waState = 'connected';
+                this.logger.log(`[WhatsAppAdapter] Listening on group: "${this.groupChat.name}"`);
+            } else {
+                this.logger.warn(`[WhatsAppAdapter] Group "${this.groupName}" not found.`);
+                chats.filter(c => c.isGroup).forEach(c => this.logger.log(`  - ${c.name}`));
+            }
+
+            // Wire up inbound message handler
+            client.on('message_create', async (msg) => {
+                if (!this.processInboundMessage) return;
+                await this.processInboundMessage(msg).catch(err => {
+                    this.logger.error(`[WhatsAppAdapter] Unhandled error in message handler: ${err.message}`);
+                });
+            });
+
+            this._startHeartbeat();
+        });
+    }
+
+    _scheduleReconnect() {
+        if (this.isReconnecting) return;
+        this.isReconnecting = true;
+        this.reconnectAttempts++;
+        const delay = this._getBackoffDelay(this.reconnectAttempts);
+        this.logger.log(`[WhatsAppAdapter] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms...`);
+        setTimeout(() => this._doReconnect(), delay);
+    }
+
+    async _doReconnect() {
+        this.logger.log('[WhatsAppAdapter] Executing reconnect: destroy + recreate...');
+        try {
+            await this.client.destroy();
+        } catch { /* old client may already be gone */ }
+
+        this.client = this._createClient();
+        this._setupClientEvents(this.client);
+        clearChromiumLocks('.wwebjs_auth');
+
+        try {
+            await this.client.initialize();
+            // isReconnecting and reconnectAttempts reset in 'ready' handler
+        } catch (err) {
+            this.logger.error('[WhatsAppAdapter] Reconnect initialize failed:', err.message);
+            this.isReconnecting = false;
+            this._scheduleReconnect();
+        }
+    }
+
+    _startHeartbeat() {
+        this._stopHeartbeat(); // clear any existing interval first
+        this.heartbeatInterval = setInterval(async () => {
+            if (this.waState !== 'connected' || this.isReconnecting) return;
+            try {
+                const state = await this.client.getState();
+                if (state !== 'CONNECTED') {
+                    this.logger.log(`[WhatsAppAdapter] Heartbeat: state=${state}, reconnecting...`);
+                    this._scheduleReconnect();
+                }
+            } catch (err) {
+                this.logger.log(`[WhatsAppAdapter] Heartbeat: getState() threw, reconnecting... (${err.message})`);
+                this._scheduleReconnect();
+            }
+        }, 30_000);
+    }
+
+    _stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
+
+    async start() {
+        if (this.groupName === 'mock') {
+            this.logger.log('[WhatsAppAdapter] Running in MOCK mode. Bypassing Chromium download.');
+            this.waState = 'connected';
+            this.groupChat = { name: 'mock' };
+            return;
+        }
+
+        const INIT_TIMEOUT_MS = 120_000;
+
+        this.client = this._createClient();
+        this._setupClientEvents(this.client);
 
         return new Promise((resolve, reject) => {
             let settled = false;
@@ -131,37 +210,17 @@ export class WhatsAppAdapter extends IAdapter {
                 }
             }, INIT_TIMEOUT_MS);
 
-            this.client.on('ready', async () => {
-                settled = true;
-                clearTimeout(timeout);
-                this.logger.log('[WhatsAppAdapter] Client ready');
-                this.reconnectAttempts = 0; // Reset reconnection counter on successful connect
-
-                const chats = await this.client.getChats();
-                this.groupChat = chats.find(c => c.isGroup && c.name === this.groupName);
-
-                if (this.groupChat) {
-                    this.waState = 'connected';
-                    this.logger.log(`[WhatsAppAdapter] Listening on group: "${this.groupChat.name}"`);
-                } else {
-                    this.logger.warn(`[WhatsAppAdapter] Group "${this.groupName}" not found.`);
-                    chats.filter(c => c.isGroup).forEach(c => this.logger.log(`  - ${c.name}`));
+            this.client.once('ready', () => {
+                if (!settled) {
+                    settled = true;
+                    clearTimeout(timeout);
+                    resolve();
                 }
-
-                // Wire up inbound message handler
-                this.client.on('message_create', async (msg) => {
-                    if (!this.processInboundMessage) return;
-                    await this.processInboundMessage(msg).catch(err => {
-                        this.logger.error(`[WhatsAppAdapter] Unhandled error in message handler: ${err.message}`);
-                    });
-                });
-
-                resolve();
             });
 
             clearChromiumLocks('.wwebjs_auth');
             this.client.initialize().catch(e => {
-                this.logger.error(`[WhatsAppAdapter] Initialization failure:`, e);
+                this.logger.error('[WhatsAppAdapter] Initialization failure:', e);
                 this.waState = 'disconnected';
                 if (!settled) {
                     settled = true;
@@ -203,7 +262,7 @@ export class WhatsAppAdapter extends IAdapter {
 
         const contact = await msg.getContact();
         const sender = contact.pushname || contact.number;
-        
+
         let hasMedia = msg.hasMedia;
         let payload = msg.body.trim();
 
@@ -244,6 +303,7 @@ export class WhatsAppAdapter extends IAdapter {
     }
 
     async stop() {
+        this._stopHeartbeat();
         if (this.client) {
             await this.client.destroy();
             this.client = null;
@@ -253,7 +313,7 @@ export class WhatsAppAdapter extends IAdapter {
     async sendMessage(sessionId, payload, metadata = {}) {
         if (!this.groupChat) throw new Error('[WhatsAppAdapter] not connected to target group');
         const text = typeof payload === 'string' ? payload : payload.text || '';
-        
+
         const options = {};
         if (metadata.replyToMessageId) {
             options.quotedMessageId = metadata.replyToMessageId;
